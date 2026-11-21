@@ -126,9 +126,16 @@ export default function HomePage() {
               <QrCode className="w-4 h-4" /> Thử Quét QR Lô Hàng
             </Link>
 
-            {user ? (
+       {user ? (
               <div className="flex items-center gap-2">
-                {user.ma_vai_tro !== 'customer' && (
+                {user.ma_vai_tro === 'customer' ? (
+                  <Link
+                    to="/my-account"
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-500 text-white text-xs font-bold hover:bg-amber-600"
+                  >
+                    Đơn hàng & Gói định kỳ
+                  </Link>
+                ) : (
                   <Link
                     to="/dashboard"
                     className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-500 text-white text-xs font-bold hover:bg-amber-600"
