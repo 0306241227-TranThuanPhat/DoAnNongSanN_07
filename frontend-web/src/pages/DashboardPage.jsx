@@ -156,8 +156,23 @@ export default function DashboardPage() {
                 Admin (Thống kê)
               </button>
             )}
+            <button
+  onClick={async () => {
+    try {
+      const res = await axios.post('http://127.0.0.1:8000/api/scheduler/run-now');
+      alert(res.data.message || 'Đã chạy Scheduler thành công!');
+      loadAll();
+    } catch (err) {
+      alert('Lỗi chạy Scheduler: ' + (err.response?.data?.message || err.message));
+    }
+  }}
+  className="px-3.5 py-2 rounded-xl text-xs font-bold bg-teal-600 hover:bg-teal-500 text-white"
+>
+  ▶ Chạy Scheduler 18:00
+</button>
           </div>
         </div>
+        
       </header>
 
       <main className="max-w-7xl mx-auto px-4 mt-6 space-y-6">

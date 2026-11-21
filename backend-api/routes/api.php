@@ -4,6 +4,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Artisan;
 
 // 1. API Lấy danh sách sản phẩm thật kèm tổng tồn kho khả dụng (chưa hết hạn)
 Route::get('/products', function () {
@@ -39,7 +40,6 @@ Route::get('/products', function () {
     return response()->json($products);
 });
 
-
 // 2. API Truy xuất nguồn gốc qua mã QR (UC-04)
 Route::get('/trace/{qrToken}', function ($qrToken) {
     $batch = DB::table('batches')
@@ -74,7 +74,6 @@ Route::get('/trace/{qrToken}', function ($qrToken) {
         'documents' => $documents,
     ]);
 });
-
 
 // 3. API Đặt hàng & Trừ kho tự động theo nguyên tắc FEFO (UC-01)
 Route::post('/orders/checkout', function (Request $request) {
@@ -139,6 +138,8 @@ Route::post('/orders/checkout', function (Request $request) {
         ]);
     });
 });
+
+// 4. Đăng nhập & Đăng ký
 Route::post('/login', function (Request $request) {
     $user = DB::table('users')
         ->join('roles', 'users.role_id', '=', 'roles.id')
@@ -190,7 +191,7 @@ Route::get('/dashboard/overview', function () {
         ->get();
 
     $orders = DB::table('orders')
-        ->orderBy('ngay_tao', 'desc')
+        ->orderBy('id', 'desc')
         ->get()
         ->map(function ($order) {
             $order->chi_tiet = DB::table('order_details')
@@ -304,6 +305,7 @@ Route::post('/sales/flash-sale/{batchId}', function (Request $request, $batchId)
 
     return response()->json(['message' => 'Đã cập nhật giá Flash Sale xả hàng cho lô!']);
 });
+
 // 10. Lấy danh sách gói rau củ định kỳ (UC-02)
 Route::get('/subscription-plans', function () {
     $plans = DB::table('subscription_plans')
@@ -429,7 +431,7 @@ Route::post('/subscriptions', function (Request $request) {
 Route::get('/my-orders/{userId}', function ($userId) {
     $orders = DB::table('orders')
         ->where('user_id', $userId)
-        ->orderBy('ngay_tao', 'desc')
+        ->orderBy('id', 'desc')
         ->get()
         ->map(function ($order) {
             $order->chi_tiet = DB::table('order_details')
@@ -623,3 +625,42 @@ Route::post('/sales/complaints/{id}/resolve', function (Request $request, $id) {
     });
 });
 
+// 16. Kích hoạt chạy thử Scheduler 18:00 ngay lập tức để demo (UC-02 & UC-06)
+// 16. Kích hoạt chạy thử Scheduler 18:00 ngay lập tức để demo (UC-02 & UC-06)
+Route::post('/scheduler/run-now', function () {
+    $tomorrow = now()->addDay()->toDateString();
+
+    // Kiểm tra xem đã có đơn 'Chờ giao' nào đúng lịch ngày mai chưa
+    $hasOrderTomorrow = DB::table('delivery_schedules')
+        ->join('orders', 'delivery_schedules.order_id', '=', 'orders.id')
+        ->where('orders.trang_thai', 'Chờ giao')
+        ->whereDate('delivery_schedules.ngay_giao', $tomorrow)
+        ->exists();
+
+    if (!$hasOrderTomorrow) {
+        $nextSchedule = DB::table('delivery_schedules')
+            ->join('orders', 'delivery_schedules.order_id', '=', 'orders.id')
+            ->where('orders.trang_thai', 'Chờ giao')
+            ->orderBy('delivery_schedules.id', 'asc')
+            ->select('delivery_schedules.id', 'delivery_schedules.subscription_id')
+            ->first();
+
+        if ($nextSchedule) {
+            // Dời lịch của đợt đã chạy trước đó (nếu cùng gói & trùng ngày mai) để tránh lỗi uq_delivery_sub_ngay
+            DB::table('delivery_schedules')
+                ->where('subscription_id', $nextSchedule->subscription_id)
+                ->whereDate('ngay_giao', $tomorrow)
+                ->update(['ngay_giao' => DB::raw('DATE_SUB(ngay_giao, INTERVAL id DAY)')]);
+
+            DB::table('delivery_schedules')
+                ->where('id', $nextSchedule->id)
+                ->update(['ngay_giao' => $tomorrow]);
+        }
+    }
+
+    Artisan::call('farm:daily-tasks');
+
+    return response()->json([
+        'message' => trim(Artisan::output()),
+    ]);
+});
