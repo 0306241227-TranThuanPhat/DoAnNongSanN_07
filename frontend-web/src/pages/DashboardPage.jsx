@@ -11,6 +11,7 @@ export default function DashboardPage() {
   const user = JSON.parse(localStorage.getItem('user') || 'null');
   const [data, setData] = useState(null);
   const [products, setProducts] = useState([]);
+  const [complaints, setComplaints] = useState([]);
   const [activeTab, setActiveTab] = useState(
     user?.ma_vai_tro === 'farm_staff' ? 'farm' : user?.ma_vai_tro === 'sales' ? 'sales' : 'admin'
   );
@@ -41,6 +42,7 @@ export default function DashboardPage() {
   const loadAll = () => {
     axios.get('http://127.0.0.1:8000/api/dashboard/overview').then(res => setData(res.data));
     axios.get('http://127.0.0.1:8000/api/products').then(res => setProducts(res.data));
+    axios.get('http://127.0.0.1:8000/api/sales/complaints').then(res => setComplaints(res.data));
   };
 
   useEffect(() => {
@@ -88,7 +90,7 @@ export default function DashboardPage() {
   };
 
   const handleApplyFlashSale = async (batchId, giaGoc) => {
-    const giaGiam = Math.round(Number(giaGoc) * 0.7); // Giảm 30% xả hàng cận hạn
+    const giaGiam = Math.round(Number(giaGoc) * 0.7);
     const res = await axios.post(`http://127.0.0.1:8000/api/sales/flash-sale/${batchId}`, {
       gia_xa_hang: giaGiam,
     });
@@ -96,7 +98,19 @@ export default function DashboardPage() {
     loadAll();
   };
 
-  // Lọc lô cận hạn (còn <= 2 ngày) theo UC-06
+  const handleResolveComplaint = async (id, action) => {
+    try {
+      const res = await axios.post(`http://127.0.0.1:8000/api/sales/complaints/${id}/resolve`, {
+        action,
+        sales_id: user.id,
+      });
+      alert(res.data.message);
+      loadAll();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Lỗi xử lý khiếu nại!');
+    }
+  };
+
   const nearExpiryBatches = data.batches.filter(b => {
     const diffDays = Math.ceil((new Date(b.ngay_het_han) - new Date()) / (1000 * 60 * 60 * 24));
     return Number(b.so_luong_ton) > 0 && diffDays <= 2;
@@ -117,7 +131,6 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Chuyển phân hệ theo quyền hạn (NFR07) */}
           <div className="flex gap-2">
             {(user.ma_vai_tro === 'admin' || user.ma_vai_tro === 'farm_staff') && (
               <button
@@ -152,7 +165,6 @@ export default function DashboardPage() {
         {activeTab === 'farm' && (
           <div className="space-y-6">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Form 1: Tạo lô thu hoạch & Sinh QR */}
               <form onSubmit={handleCreateBatch} className="bg-white p-5 rounded-2xl shadow-xs border space-y-3">
                 <h2 className="font-bold text-sm flex items-center gap-2 text-emerald-800">
                   <PlusCircle className="w-4 h-4" /> Tạo Lô Thu Hoạch & Sinh QR (UC-04)
@@ -186,7 +198,6 @@ export default function DashboardPage() {
                 </button>
               </form>
 
-              {/* Form 2: Cập nhật nhật ký canh tác */}
               <form onSubmit={handleAddLog} className="bg-white p-5 rounded-2xl shadow-xs border space-y-3">
                 <h2 className="font-bold text-sm flex items-center gap-2 text-emerald-800">
                   <Sprout className="w-4 h-4" /> Cập Nhật Nhật Ký Canh Tác
@@ -218,7 +229,6 @@ export default function DashboardPage() {
                 </button>
               </form>
 
-              {/* Form 3: Ghi nhận xuất hủy / hao hụt (UC-05) */}
               <form onSubmit={handleCreateWaste} className="bg-white p-5 rounded-2xl shadow-xs border space-y-3">
                 <h2 className="font-bold text-sm flex items-center gap-2 text-red-700">
                   <Trash2 className="w-4 h-4" /> Ghi Nhận Xuất Hủy / Hao Hụt (UC-05)
@@ -254,7 +264,6 @@ export default function DashboardPage() {
               </form>
             </div>
 
-            {/* Bảng danh sách Lô hàng & Link QR */}
             <div className="bg-white p-5 rounded-2xl shadow-xs border overflow-x-auto">
               <h3 className="font-bold text-sm mb-3">Danh Sách Lô Nông Sản & Tem Truy Xuất QR</h3>
               <table className="w-full text-xs text-left">
@@ -291,7 +300,7 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* ================= PHÂN HỆ 2: SALES (UC-01 FEFO & UC-06 FLASH SALE) ================= */}
+        {/* ================= PHÂN HỆ 2: SALES (UC-01 FEFO, UC-03 KHIẾU NẠI & UC-06 FLASH SALE) ================= */}
         {activeTab === 'sales' && (
           <div className="space-y-6">
             {/* Cảnh báo lô cận hạn (UC-06) */}
@@ -322,6 +331,47 @@ export default function DashboardPage() {
               </div>
             </div>
 
+            {/* Danh sách Khiếu nại cần xử lý (UC-03) */}
+            <div className="bg-white p-5 rounded-2xl shadow-xs border border-amber-200">
+              <h2 className="font-bold text-sm text-red-700 mb-3">Danh Sách Khiếu Nại Cần Xử Lý (UC-03)</h2>
+              {complaints.length === 0 ? (
+                <p className="text-xs text-stone-400">Chưa có yêu cầu khiếu nại nào.</p>
+              ) : (
+                <div className="space-y-3">
+                  {complaints.map(c => (
+                    <div key={c.id} className="p-4 border rounded-xl flex flex-wrap items-center justify-between gap-4 bg-stone-50">
+                      <div>
+                        <div className="font-bold text-xs">
+                          Đơn {c.ma_don_hang} • Khách: {c.ten_khach} • <span className="text-amber-700">{c.trang_thai}</span>
+                        </div>
+                        <div className="text-xs text-red-700 font-semibold mt-0.5">Lý do: {c.ly_do}</div>
+                        <p className="text-xs text-stone-600 mt-0.5">{c.mo_ta}</p>
+                        {c.media?.[0] && (
+                          <a href={c.media[0].file_url} target="_blank" rel="noreferrer" className="text-[11px] text-emerald-700 underline font-bold mt-1 inline-block">
+                            Xem ảnh minh chứng
+                          </a>
+                        )}
+                      </div>
+
+                      {c.trang_thai === 'Chờ xử lý' && (
+                        <div className="flex gap-2">
+                          <button onClick={() => handleResolveComplaint(c.id, 'Hoàn tiền')} className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold">
+                            Duyệt Hoàn tiền
+                          </button>
+                          <button onClick={() => handleResolveComplaint(c.id, 'Giao bù')} className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold">
+                            Duyệt Giao bù (FEFO)
+                          </button>
+                          <button onClick={() => handleResolveComplaint(c.id, 'Từ chối')} className="px-3 py-1.5 bg-stone-300 hover:bg-stone-400 text-stone-800 rounded-xl text-xs font-bold">
+                            Từ chối
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             {/* Danh sách Đơn hàng & Truy vết Lô xuất FEFO (UC-01) */}
             <div className="bg-white p-5 rounded-2xl shadow-xs border">
               <h2 className="font-bold text-sm flex items-center gap-2 mb-4">
@@ -329,7 +379,7 @@ export default function DashboardPage() {
               </h2>
               <div className="space-y-4">
                 {data.orders.length === 0 ? (
-                  <p className="text-xs text-stone-400">Chưa có đơn hàng nào. Hãy thử đặt hàng ở Trang chủ để kiểm tra thuật toán FEFO!</p>
+                  <p className="text-xs text-stone-400">Chưa có đơn hàng nào.</p>
                 ) : data.orders.map(order => (
                   <div key={order.id} className="border rounded-xl p-4 bg-stone-50/50">
                     <div className="flex flex-wrap justify-between gap-2 pb-2 border-b">
@@ -346,7 +396,7 @@ export default function DashboardPage() {
                         <div key={ct.id} className="text-xs flex justify-between bg-white px-3 py-1.5 rounded-lg border">
                           <span>{ct.ten_san_pham} (SL: <b>{ct.so_luong}</b>)</span>
                           <span className="font-mono text-amber-800 font-semibold">
-                            Xuất từ lô: {ct.ma_lo} (HSD: {ct.ngay_het_han})
+                            Xuất từ lô: {ct.ma_lo || 'Chờ xuất FEFO'} {ct.ngay_het_han ? `(HSD: ${ct.ngay_het_han})` : ''}
                           </span>
                         </div>
                       ))}

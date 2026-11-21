@@ -6,10 +6,11 @@ import { ArrowLeft, Package, CalendarClock, AlertCircle, CheckCircle2, Sparkles 
 export default function CustomerPortalPage() {
   const navigate = useNavigate();
   const user = JSON.parse(localStorage.getItem('user') || 'null');
-  const [tab, setTab] = useState('orders');
+  const [tab, setTab] = useState('orders'); // 'orders' | 'subscriptions'
   const [myData, setMyData] = useState({ orders: [], subscriptions: [] });
   const [plans, setPlans] = useState([]);
 
+  // Modal khiếu nại 24h (UC-03)
   const [complaintOrder, setComplaintOrder] = useState(null);
   const [complaintForm, setComplaintForm] = useState({
     ly_do: 'Rau củ bị dập nát khi vận chuyển',
@@ -17,6 +18,7 @@ export default function CustomerPortalPage() {
     file_url: 'https://images.unsplash.com/photo-1592924357228-91a4daadcfea?w=600',
   });
 
+  // Form đăng ký gói định kỳ (UC-02)
   const [selectedPlan, setSelectedPlan] = useState(null);
   const [subForm, setSubForm] = useState({
     ten_nguoi_nhan: user?.ho_ten || '',
@@ -24,27 +26,16 @@ export default function CustomerPortalPage() {
     dia_chi_chi_tiet: '123 Lê Lợi, Phường Bến Nghé',
     quan_huyen: 'Quận 1',
     khung_gio_nhan: '08:00 - 10:00',
-    days_of_week: [2, 5],
+    days_of_week: [2, 5], // Thứ 3 & Thứ 6
   });
 
   const loadData = () => {
-    if (!user?.id) return;
-    axios.get(`http://127.0.0.1:8000/api/my-orders/${user.id}`)
-      .then(res => {
-        setMyData({
-          orders: Array.isArray(res.data?.orders) ? res.data.orders : [],
-          subscriptions: Array.isArray(res.data?.subscriptions) ? res.data.subscriptions : [],
-        });
-      })
-      .catch(err => console.error('Lỗi tải đơn hàng:', err));
-
-    axios.get('http://127.0.0.1:8000/api/subscription-plans')
-      .then(res => {
-        const list = Array.isArray(res.data) ? res.data : [];
-        setPlans(list);
-        if (list.length > 0 && !selectedPlan) setSelectedPlan(list[0]);
-      })
-      .catch(err => console.error('Lỗi tải gói định kỳ:', err));
+    if (!user) return;
+    axios.get(`http://127.0.0.1:8000/api/my-orders/${user.id}`).then(res => setMyData(res.data));
+    axios.get('http://127.0.0.1:8000/api/subscription-plans').then(res => {
+      setPlans(res.data);
+      if (res.data.length > 0 && !selectedPlan) setSelectedPlan(res.data[0]);
+    });
   };
 
   useEffect(() => {
@@ -56,13 +47,9 @@ export default function CustomerPortalPage() {
   }, []);
 
   const handleMarkDelivered = async (orderId) => {
-    try {
-      const res = await axios.post(`http://127.0.0.1:8000/api/orders/${orderId}/mark-delivered`);
-      alert(res.data.message);
-      loadData();
-    } catch (err) {
-      alert(err.response?.data?.message || 'Lỗi cập nhật trạng thái đơn!');
-    }
+    const res = await axios.post(`http://127.0.0.1:8000/api/orders/${orderId}/mark-delivered`);
+    alert(res.data.message);
+    loadData();
   };
 
   const handleSendComplaint = async (e) => {
@@ -114,7 +101,7 @@ export default function CustomerPortalPage() {
             </Link>
             <div>
               <h1 className="font-extrabold text-base">TÀI KHOẢN KHÁCH HÀNG: {user?.ho_ten}</h1>
-              <p className="text-xs text-emerald-200">Điểm tích lũy Loyalty: {user?.diem_tich_luy ?? 0} điểm</p>
+              <p className="text-xs text-emerald-200">Điểm tích lũy Loyalty: {user?.diem_tich_luy} điểm</p>
             </div>
           </div>
 
@@ -140,6 +127,7 @@ export default function CustomerPortalPage() {
       </header>
 
       <main className="max-w-5xl mx-auto px-4 mt-6">
+        {/* ================= TAB 1: LỊCH SỬ ĐƠN HÀNG & KHIẾU NẠI 24H (UC-03) ================= */}
         {tab === 'orders' && (
           <div className="space-y-4">
             <h2 className="font-extrabold text-lg text-stone-800">Danh Sách Đơn Hàng (Thường, Đơn Con & Đơn Bù)</h2>
@@ -168,7 +156,7 @@ export default function CustomerPortalPage() {
                 </div>
 
                 <div className="space-y-1.5">
-                  {(order.chi_tiet || []).map(ct => (
+                  {order.chi_tiet.map(ct => (
                     <div key={ct.id} className="text-xs flex justify-between text-stone-600 bg-stone-50 px-3 py-2 rounded-lg">
                       <span>{ct.ten_san_pham} x <b>{ct.so_luong}</b></span>
                       <span className="font-mono text-stone-400">{ct.ma_lo ? `Lô: ${ct.ma_lo}` : 'Chờ xuất FEFO'}</span>
@@ -176,6 +164,7 @@ export default function CustomerPortalPage() {
                   ))}
                 </div>
 
+                {/* Hành động: Giả lập nhận hàng / Gửi khiếu nại 24h */}
                 <div className="pt-2 flex flex-wrap items-center justify-between gap-2">
                   <div className="text-xs text-stone-400">Địa chỉ: {order.dia_chi_giao}</div>
 
@@ -210,8 +199,10 @@ export default function CustomerPortalPage() {
           </div>
         )}
 
+        {/* ================= TAB 2: ĐĂNG KÝ GÓI RAU CỦ ĐỊNH KỲ (UC-02) ================= */}
         {tab === 'subscriptions' && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Danh sách gói */}
             <div className="space-y-4">
               <h2 className="font-extrabold text-lg text-stone-800">1. Chọn Gói Rau Củ Định Kỳ</h2>
               {plans.map(plan => (
@@ -233,7 +224,7 @@ export default function CustomerPortalPage() {
                     </div>
                   </div>
                   <div className="mt-3 pt-3 border-t flex flex-wrap gap-1.5">
-                    {(plan.san_pham || []).map(sp => (
+                    {plan.san_pham.map(sp => (
                       <span key={sp.id} className="text-[11px] bg-emerald-50 text-emerald-800 px-2.5 py-0.5 rounded-full font-medium">
                         {sp.ten_san_pham} ({Number(sp.so_luong)} {sp.don_vi_tinh})
                       </span>
@@ -243,6 +234,7 @@ export default function CustomerPortalPage() {
               ))}
             </div>
 
+            {/* Form cấu hình lịch giao 30 ngày */}
             {selectedPlan && (
               <form onSubmit={handleSubscribe} className="bg-white p-6 rounded-2xl border border-stone-200 space-y-4 h-fit">
                 <h2 className="font-extrabold text-lg text-stone-800 flex items-center gap-2">
@@ -307,6 +299,7 @@ export default function CustomerPortalPage() {
         )}
       </main>
 
+      {/* Modal Gửi Khiếu Nại 24h (UC-03) */}
       {complaintOrder && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
           <form onSubmit={handleSendComplaint} className="bg-white max-w-md w-full rounded-2xl p-6 space-y-4">
