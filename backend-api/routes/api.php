@@ -3,6 +3,7 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Hash;
 
 // 1. API Lấy danh sách sản phẩm thật kèm tổng tồn kho khả dụng (chưa hết hạn)
 Route::get('/products', function () {
@@ -135,4 +136,169 @@ Route::post('/orders/checkout', function (Request $request) {
             'order_id' => $orderId,
         ]);
     });
+});
+Route::post('/login', function (Request $request) {
+    $user = DB::table('users')
+        ->join('roles', 'users.role_id', '=', 'roles.id')
+        ->where('users.email', $request->input('email'))
+        ->select('users.*', 'roles.ma_vai_tro', 'roles.ten_vai_tro')
+        ->first();
+
+    if (!$user || !Hash::check($request->input('mat_khau'), $user->mat_khau)) {
+        return response()->json(['message' => 'Email hoặc mật khẩu không chính xác!'], 401);
+    }
+
+    unset($user->mat_khau);
+    return response()->json([
+        'message' => 'Đăng nhập thành công!',
+        'user' => $user,
+    ]);
+});
+
+Route::post('/register', function (Request $request) {
+    $exists = DB::table('users')->where('email', $request->input('email'))->exists();
+    if ($exists) {
+        return response()->json(['message' => 'Email này đã được đăng ký!'], 422);
+    }
+
+    $id = DB::table('users')->insertGetId([
+        'role_id' => 1, // Mặc định vai trò Customer
+        'ho_ten' => $request->input('ho_ten'),
+        'email' => $request->input('email'),
+        'so_dien_thoai' => $request->input('so_dien_thoai'),
+        'mat_khau' => Hash::make($request->input('mat_khau')),
+    ]);
+
+    $user = DB::table('users')
+        ->join('roles', 'users.role_id', '=', 'roles.id')
+        ->where('users.id', $id)
+        ->select('users.*', 'roles.ma_vai_tro', 'roles.ten_vai_tro')
+        ->first();
+    unset($user->mat_khau);
+
+    return response()->json(['message' => 'Đăng ký thành công!', 'user' => $user]);
+});
+
+// 5. API Tổng hợp dữ liệu cho Dashboard (Admin, Sales, Farm Staff)
+Route::get('/dashboard/overview', function () {
+    $batches = DB::table('batches')
+        ->join('products', 'batches.product_id', '=', 'products.id')
+        ->select('batches.*', 'products.ten_san_pham', 'products.gia_ban_co_ban')
+        ->orderBy('batches.ngay_het_han', 'asc')
+        ->get();
+
+    $orders = DB::table('orders')
+        ->orderBy('ngay_tao', 'desc')
+        ->get()
+        ->map(function ($order) {
+            $order->chi_tiet = DB::table('order_details')
+                ->join('products', 'order_details.product_id', '=', 'products.id')
+                ->leftJoin('batches', 'order_details.batch_id', '=', 'batches.id')
+                ->where('order_details.order_id', $order->id)
+                ->select('order_details.*', 'products.ten_san_pham', 'batches.ma_lo', 'batches.ngay_het_han')
+                ->get();
+            return $order;
+        });
+
+    $wasteRecords = DB::table('waste_records')
+        ->join('batches', 'waste_records.batch_id', '=', 'batches.id')
+        ->join('products', 'batches.product_id', '=', 'products.id')
+        ->join('users', 'waste_records.nguoi_lap_id', '=', 'users.id')
+        ->select('waste_records.*', 'batches.ma_lo', 'products.ten_san_pham', 'users.ho_ten as nguoi_lap')
+        ->orderBy('waste_records.ngay_tao', 'desc')
+        ->get();
+
+    // Tính KPI tỷ lệ hao hụt toàn trang trại (Mục tiêu < 5%)
+    $tongNhap = $batches->sum('so_luong_nhap');
+    $tongHaoHut = $batches->sum('so_luong_hao_hut');
+    $tyLeHaoHut = $tongNhap > 0 ? round(($tongHaoHut / $tongNhap) * 100, 2) : 0;
+
+    return response()->json([
+        'batches' => $batches,
+        'orders' => $orders,
+        'waste_records' => $wasteRecords,
+        'stats' => [
+            'tong_doanh_thu' => $orders->where('trang_thai', '!=', 'Đã hủy')->sum('tong_thanh_toan'),
+            'tong_don_hang' => $orders->count(),
+            'tong_ton_kho' => $batches->sum('so_luong_ton'),
+            'ty_le_hao_hut' => $tyLeHaoHut,
+        ],
+    ]);
+});
+
+// 6. Farm Staff: Tạo lô thu hoạch mới & sinh mã QR (UC-04)
+Route::post('/farm/batches', function (Request $request) {
+    $maLo = 'LO-' . strtoupper(substr(uniqid(), -5));
+    $qrToken = 'qr-' . strtolower($maLo) . '-' . time();
+
+    $id = DB::table('batches')->insertGetId([
+        'product_id' => $request->input('product_id'),
+        'ma_lo' => $maLo,
+        'farm_staff_id' => $request->input('farm_staff_id', 2),
+        'ngay_gieo_hat' => $request->input('ngay_gieo_hat'),
+        'ngay_thu_hoach' => $request->input('ngay_thu_hoach'),
+        'ngay_het_han' => $request->input('ngay_het_han'),
+        'so_luong_nhap' => $request->input('so_luong_nhap'),
+        'so_luong_ton' => $request->input('so_luong_nhap'),
+        'so_luong_hao_hut' => 0,
+        'qr_code' => $qrToken,
+        'trang_thai' => 'Đã thu hoạch',
+    ]);
+
+    return response()->json(['message' => "Đã tạo lô $maLo và sinh mã QR thành công!", 'id' => $id, 'qr_code' => $qrToken]);
+});
+
+// 7. Farm Staff: Thêm nhật ký canh tác cho lô (UC-04)
+Route::post('/farm/farming-logs', function (Request $request) {
+    DB::table('farming_logs')->insert([
+        'batch_id' => $request->input('batch_id'),
+        'farm_staff_id' => $request->input('farm_staff_id', 2),
+        'hanh_dong' => $request->input('hanh_dong'),
+        'thoi_gian' => now(),
+        'ghi_chu' => $request->input('ghi_chu'),
+        'hinh_anh_minh_chung' => $request->input('hinh_anh_minh_chung') ?: 'https://images.unsplash.com/photo-1591857177580-dc82b9ac4e1e?w=600',
+        'da_cong_bo' => true,
+    ]);
+
+    return response()->json(['message' => 'Đã thêm nhật ký canh tác và công bố lên mã QR!']);
+});
+
+// 8. Farm Staff: Ghi nhận xuất hủy / hao hụt (UC-05, RB-11)
+Route::post('/farm/waste-records', function (Request $request) {
+    $soLuongHuy = (float) $request->input('so_luong');
+    if ($soLuongHuy <= 0 || !$request->input('ly_do')) {
+        return response()->json(['message' => 'Số lượng phải > 0 và bắt buộc nhập lý do xuất hủy!'], 422);
+    }
+
+    return DB::transaction(function () use ($request, $soLuongHuy) {
+        $batch = DB::table('batches')->where('id', $request->input('batch_id'))->lockForUpdate()->first();
+        if (!$batch || $batch->so_luong_ton < $soLuongHuy) {
+            abort(400, 'Số lượng xuất hủy vượt quá tồn kho hiện tại của lô!');
+        }
+
+        DB::table('batches')->where('id', $batch->id)->update([
+            'so_luong_ton' => $batch->so_luong_ton - $soLuongHuy,
+            'so_luong_hao_hut' => $batch->so_luong_hao_hut + $soLuongHuy,
+        ]);
+
+        DB::table('waste_records')->insert([
+            'batch_id' => $batch->id,
+            'loai_phieu' => 'Xuất hủy',
+            'so_luong' => $soLuongHuy,
+            'ly_do' => $request->input('ly_do'),
+            'nguoi_lap_id' => $request->input('nguoi_lap_id', 2),
+        ]);
+
+        return response()->json(['message' => "Đã lập phiếu xuất hủy {$soLuongHuy} đơn vị cho lô {$batch->ma_lo}!"]);
+    });
+});
+
+// 9. Sales: Áp dụng giảm giá Flash Sale cho lô cận hạn (UC-06)
+Route::post('/sales/flash-sale/{batchId}', function (Request $request, $batchId) {
+    $giaXaHang = (float) $request->input('gia_xa_hang');
+    DB::table('batches')->where('id', $batchId)->update([
+        'gia_xa_hang' => $giaXaHang > 0 ? $giaXaHang : null,
+    ]);
+
+    return response()->json(['message' => 'Đã cập nhật giá Flash Sale xả hàng cho lô!']);
 });
