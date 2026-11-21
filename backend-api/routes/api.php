@@ -39,6 +39,7 @@ Route::get('/products', function () {
     return response()->json($products);
 });
 
+
 // 2. API Truy xuất nguồn gốc qua mã QR (UC-04)
 Route::get('/trace/{qrToken}', function ($qrToken) {
     $batch = DB::table('batches')
@@ -73,6 +74,7 @@ Route::get('/trace/{qrToken}', function ($qrToken) {
         'documents' => $documents,
     ]);
 });
+
 
 // 3. API Đặt hàng & Trừ kho tự động theo nguyên tắc FEFO (UC-01)
 Route::post('/orders/checkout', function (Request $request) {
@@ -302,3 +304,4 @@ Route::post('/sales/flash-sale/{batchId}', function (Request $request, $batchId)
 
     return response()->json(['message' => 'Đã cập nhật giá Flash Sale xả hàng cho lô!']);
 });
+

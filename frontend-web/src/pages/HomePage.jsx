@@ -319,48 +319,67 @@ export default function HomePage() {
                   </div>
 
                   {/* Form giao hàng */}
-                  <form onSubmit={handleCheckout} className="mt-4 pt-4 border-t space-y-3">
-                    <div className="text-xs font-bold uppercase text-stone-500">Thông tin nhận hàng hỏa tốc</div>
-                    <input
-                      required
-                      placeholder="Họ tên người nhận"
-                      value={checkoutForm.ten_nguoi_nhan}
-                      onChange={e => setCheckoutForm({ ...checkoutForm, ten_nguoi_nhan: e.target.value })}
-                      className="w-full px-3 py-2 border rounded-xl text-sm"
-                    />
-                    <input
-                      required
-                      placeholder="Số điện thoại nhận hàng"
-                      value={checkoutForm.so_dien_thoai_nhan}
-                      onChange={e => setCheckoutForm({ ...checkoutForm, so_dien_thoai_nhan: e.target.value })}
-                      className="w-full px-3 py-2 border rounded-xl text-sm"
-                    />
-                    <input
-                      required
-                      placeholder="Địa chỉ giao hàng chi tiết"
-                      value={checkoutForm.dia_chi_giao}
-                      onChange={e => setCheckoutForm({ ...checkoutForm, dia_chi_giao: e.target.value })}
-                      className="w-full px-3 py-2 border rounded-xl text-sm"
-                    />
-
-                    <div className="bg-stone-50 p-3 rounded-xl space-y-1 text-xs">
-                      <div className="flex justify-between"><span>Tạm tính:</span><span>{subTotal.toLocaleString('vi-VN')}đ</span></div>
-                      <div className="flex justify-between"><span>Phí ship hỏa tốc:</span><span>{shipFee === 0 ? 'Miễn phí' : `${shipFee.toLocaleString('vi-VN')}đ`}</span></div>
-                      <div className="flex justify-between font-extrabold text-sm text-emerald-800 pt-1 border-t">
-                        <span>Tổng thanh toán:</span><span>{totalAmount.toLocaleString('vi-VN')}đ</span>
+                  {!user ? (
+                    <div className="mt-4 pt-4 border-t">
+                      <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl text-center space-y-3">
+                        <p className="text-xs text-amber-900 font-medium leading-relaxed">
+                          Khách vãng lai chỉ được thêm sản phẩm vào giỏ hàng. Vui lòng đăng nhập để hoàn tất thanh toán và tích điểm.
+                        </p>
+                        <Link
+                          to="/login"
+                          className="block w-full bg-emerald-700 hover:bg-emerald-800 text-white py-2.5 rounded-xl font-bold text-xs"
+                        >
+                          Đăng nhập ngay để đặt hàng
+                        </Link>
                       </div>
                     </div>
+                  ) : (
+                    <form onSubmit={handleCheckout} className="mt-4 pt-4 border-t space-y-3">
+                      <div className="text-xs font-bold uppercase text-stone-500">Thông tin nhận hàng hỏa tốc</div>
+                      <input
+                        required
+                        placeholder="Họ tên người nhận"
+                        value={checkoutForm.ten_nguoi_nhan}
+                        onChange={e => setCheckoutForm({ ...checkoutForm, ten_nguoi_nhan: e.target.value })}
+                        className="w-full px-3 py-2 border rounded-xl text-sm"
+                      />
+                      <input
+                        required
+                        placeholder="Số điện thoại nhận hàng"
+                        value={checkoutForm.so_dien_thoai_nhan}
+                        onChange={e => setCheckoutForm({ ...checkoutForm, so_dien_thoai_nhan: e.target.value })}
+                        className="w-full px-3 py-2 border rounded-xl text-sm"
+                      />
+                      <input
+                        required
+                        placeholder="Địa chỉ giao hàng chi tiết"
+                        value={checkoutForm.dia_chi_giao}
+                        onChange={e => setCheckoutForm({ ...checkoutForm, dia_chi_giao: e.target.value })}
+                        className="w-full px-3 py-2 border rounded-xl text-sm"
+                      />
 
-                    <button type="submit" className="w-full bg-emerald-700 hover:bg-emerald-800 text-white py-3 rounded-xl font-bold text-sm">
-                      Xác nhận đặt hàng (Tự động trừ kho FEFO)
-                    </button>
-                  </form>
+                      <div className="bg-stone-50 p-3 rounded-xl space-y-1 text-xs">
+                        <div className="flex justify-between"><span>Tạm tính:</span><span>{subTotal.toLocaleString('vi-VN')}đ</span></div>
+                        <div className="flex justify-between"><span>Phí ship hỏa tốc:</span><span>{shipFee === 0 ? 'Miễn phí' : `${shipFee.toLocaleString('vi-VN')}đ`}</span></div>
+                        <div className="flex justify-between font-extrabold text-sm text-emerald-800 pt-1 border-t">
+                          <span>Tổng thanh toán:</span><span>{totalAmount.toLocaleString('vi-VN')}đ</span>
+                        </div>
+                      </div>
+
+                      <button type="submit" className="w-full bg-emerald-700 hover:bg-emerald-800 text-white py-3 rounded-xl font-bold text-sm">
+                        Xác nhận đặt hàng (Tự động trừ kho FEFO)
+                      </button>
+                    </form>
+                  )}
                 </>
               )}
             </div>
           </div>
         </div>
       )}
+      
     </div>
+    
   );
+  
 }
