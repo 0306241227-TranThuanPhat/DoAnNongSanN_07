@@ -34,6 +34,8 @@ Route::get('/products', function () {
 
             $item->ton_kho_kha_dung = $batches->sum('so_luong_ton');
             $item->gia_hien_tai = $batches->first()?->gia_xa_hang ?? $item->gia_ban_co_ban;
+            $item->lo_uu_tien = $batches->first();
+
             return $item;
         });
 
@@ -720,7 +722,6 @@ Route::post('/farm/batches/{batchId}/documents', function (Request $request, $ba
     if (in_array('loai_tai_lieu', $colNames)) $data['loai_tai_lieu'] = 'Giấy kiểm định chất lượng';
     if (in_array('loai_file', $colNames)) $data['loai_file'] = strtoupper($file->getClientOriginalExtension());
 
-    // Tự động cấp giá trị an toàn nếu bảng còn cột NOT NULL chưa có mặc định
     foreach ($columns as $col) {
         $name = $col['name'];
         if (!isset($data[$name]) && !$col['nullable'] && $col['default'] === null && !$col['auto_increment']) {
@@ -735,4 +736,109 @@ Route::post('/farm/batches/{batchId}/documents', function (Request $request, $ba
         'id' => $id,
         'file_url' => $fileUrl,
     ]);
+});
+
+// 18. Admin: Quản trị danh mục & thông tin sản phẩm (Thêm mới, Chỉnh sửa, Ngừng bán)
+Route::get('/admin/products', function () {
+    $products = DB::table('products')
+        ->orderBy('id', 'desc')
+        ->get()
+        ->map(function ($item) {
+            $item->ton_kho = DB::table('batches')
+                ->where('product_id', $item->id)
+                ->sum('so_luong_ton');
+
+            $certs = DB::table('product_certifications')
+                ->join('certifications', 'product_certifications.certification_id', '=', 'certifications.id')
+                ->where('product_certifications.product_id', $item->id)
+                ->pluck('certifications.ten_chung_nhan')
+                ->toArray();
+
+            $item->chung_nhan = !empty($certs) ? implode(', ', $certs) : 'VietGAP';
+            $item->dang_ban   = ($item->trang_thai === 'Đang bán');
+            return $item;
+        });
+
+    return response()->json($products);
+});
+
+Route::post('/admin/products', function (Request $request) {
+    $request->validate([
+        'ten_san_pham'   => 'required|string|max:255',
+        'don_vi_tinh'    => 'required|string|max:50',
+        'gia_ban_co_ban' => 'required|numeric|min:1000',
+    ]);
+
+    $firstCat = DB::table('categories')->first();
+
+    $id = DB::table('products')->insertGetId([
+        'category_id'       => $request->category_id ?: ($firstCat?->id ?? 1),
+        'ma_sku'            => $request->ma_sku ?: 'SP-' . rand(100, 999),
+        'ten_san_pham'      => $request->ten_san_pham,
+        'slug'              => \Illuminate\Support\Str::slug($request->ten_san_pham) . '-' . rand(10, 99),
+        'mo_ta'             => $request->mo_ta ?: 'Nông sản sạch canh tác an toàn sinh học tại Single Farm.',
+        'hinh_anh_dai_dien' => $request->hinh_anh_dai_dien ?: 'https://images.unsplash.com/photo-1540420773420-3366772f4999?w=600',
+        'gia_ban_co_ban'    => $request->gia_ban_co_ban,
+        'don_vi_tinh'       => $request->don_vi_tinh,
+        'trang_thai'        => 'Đang bán',
+        'ngay_tao'          => now(),
+        'ngay_cap_nhat'     => now(),
+    ]);
+
+    if ($request->chung_nhan) {
+        $cert = DB::table('certifications')
+            ->where('ten_chung_nhan', 'like', '%' . $request->chung_nhan . '%')
+            ->first();
+        if ($cert) {
+            DB::table('product_certifications')->insert([
+                'product_id'       => $id,
+                'certification_id' => $cert->id,
+            ]);
+        }
+    }
+
+    return response()->json(['message' => 'Thêm sản phẩm mới thành công!', 'id' => $id]);
+});
+
+Route::put('/admin/products/{id}', function (Request $request, $id) {
+    DB::table('products')->where('id', $id)->update([
+        'ma_sku'            => $request->ma_sku,
+        'ten_san_pham'      => $request->ten_san_pham,
+        'slug'              => \Illuminate\Support\Str::slug($request->ten_san_pham) . '-' . $id,
+        'don_vi_tinh'       => $request->don_vi_tinh,
+        'gia_ban_co_ban'    => $request->gia_ban_co_ban,
+        'mo_ta'             => $request->mo_ta,
+        'hinh_anh_dai_dien' => $request->hinh_anh_dai_dien,
+        'ngay_cap_nhat'     => now(),
+    ]);
+
+    if ($request->chung_nhan) {
+        $cert = DB::table('certifications')
+            ->where('ten_chung_nhan', 'like', '%' . $request->chung_nhan . '%')
+            ->first();
+        if ($cert) {
+            DB::table('product_certifications')->where('product_id', $id)->delete();
+            DB::table('product_certifications')->insert([
+                'product_id'       => $id,
+                'certification_id' => $cert->id,
+            ]);
+        }
+    }
+
+    return response()->json(['message' => 'Cập nhật thông tin sản phẩm thành công!']);
+});
+
+Route::patch('/admin/products/{id}/toggle-status', function ($id) {
+    $product = DB::table('products')->where('id', $id)->first();
+    if (!$product) {
+        return response()->json(['message' => 'Không tìm thấy sản phẩm'], 404);
+    }
+
+    $newStatus = ($product->trang_thai === 'Ngừng bán') ? 'Đang bán' : 'Ngừng bán';
+    DB::table('products')->where('id', $id)->update([
+        'trang_thai'    => $newStatus,
+        'ngay_cap_nhat' => now(),
+    ]);
+
+    return response()->json(['message' => "Đã chuyển sản phẩm sang trạng thái: {$newStatus}"]);
 });

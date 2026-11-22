@@ -21,6 +21,87 @@ const [docBatchId, setDocBatchId] = useState('');
 const [docTitle, setDocTitle] = useState('');
 const [docFile, setDocFile] = useState(null);
 const [uploadingDoc, setUploadingDoc] = useState(false);
+// Quản lý danh mục & sản phẩm (Admin)
+const [adminProducts, setAdminProducts] = useState([]);
+const [editingProductId, setEditingProductId] = useState(null);
+const [productForm, setProductForm] = useState({
+  ma_sku: '',
+  ten_san_pham: '',
+  don_vi_tinh: '500g',
+  gia_ban_co_ban: '',
+  chung_nhan: 'VietGAP',
+  hinh_anh_dai_dien: 'https://images.unsplash.com/photo-1540420773420-3366772f4999?w=600',
+  mo_ta: '',
+});
+
+const fetchAdminProducts = async () => {
+  try {
+    const res = await axios.get('http://127.0.0.1:8000/api/admin/products');
+    setAdminProducts(res.data || []);
+  } catch (err) {
+    console.error('Lỗi tải danh sách sản phẩm Admin:', err);
+  }
+};
+
+useEffect(() => {
+  fetchAdminProducts();
+}, []);
+
+const resetProductForm = () => {
+  setEditingProductId(null);
+  setProductForm({
+    ma_sku: '',
+    ten_san_pham: '',
+    don_vi_tinh: '500g',
+    gia_ban_co_ban: '',
+    chung_nhan: 'VietGAP',
+    hinh_anh_dai_dien: 'https://images.unsplash.com/photo-1540420773420-3366772f4999?w=600',
+    mo_ta: '',
+  });
+};
+
+const handleSaveProduct = async (e) => {
+  e.preventDefault();
+  try {
+    if (editingProductId) {
+      const res = await axios.put(
+        `http://127.0.0.1:8000/api/admin/products/${editingProductId}`,
+        productForm
+      );
+      alert(res.data.message);
+    } else {
+      const res = await axios.post('http://127.0.0.1:8000/api/admin/products', productForm);
+      alert(res.data.message);
+    }
+    resetProductForm();
+    fetchAdminProducts();
+  } catch (err) {
+    alert(err.response?.data?.message || 'Lỗi khi lưu sản phẩm!');
+  }
+};
+
+const handleStartEditProduct = (p) => {
+  setEditingProductId(p.id);
+  setProductForm({
+    ma_sku: p.ma_sku || '',
+    ten_san_pham: p.ten_san_pham || '',
+    don_vi_tinh: p.don_vi_tinh || '500g',
+    gia_ban_co_ban: p.gia_ban_co_ban || '',
+    chung_nhan: p.chung_nhan || 'VietGAP',
+    hinh_anh_dai_dien: p.hinh_anh_dai_dien || '',
+    mo_ta: p.mo_ta || '',
+  });
+};
+
+const handleToggleProductStatus = async (p) => {
+  try {
+    const res = await axios.patch(`http://127.0.0.1:8000/api/admin/products/${p.id}/toggle-status`);
+    alert(res.data.message);
+    fetchAdminProducts();
+  } catch (err) {
+    alert('Không thể đổi trạng thái sản phẩm!');
+  }
+};
 
   // Form Farm Staff: Tạo lô mới
   const [batchForm, setBatchForm] = useState({
@@ -69,6 +150,7 @@ const [uploadingDoc, setUploadingDoc] = useState(false);
     });
     alert(res.data.message);
     loadAll();
+    
   };
 
   const handleAddLog = async (e) => {
@@ -130,6 +212,7 @@ const handleDownloadQr = async (batch) => {
       });
       alert(res.data.message);
       loadAll();
+      
     } catch (err) {
       alert(err.response?.data?.message || 'Lỗi lập phiếu xuất hủy!');
     }
@@ -486,7 +569,206 @@ const handleDownloadQr = async (batch) => {
     </div>
   </div>
 )}
+        {/* Quản Lý Danh Mục & Thông Tin Sản Phẩm (Thêm mới, Chỉnh sửa, Ngừng bán) */}
+<div className="bg-white p-5 rounded-2xl shadow-xs border space-y-4">
+  <div className="flex flex-wrap items-center justify-between gap-2">
+    <h3 className="font-bold text-sm text-emerald-900">
+      🌿 Quản Lý Danh Mục & Thông Tin Sản Phẩm (Thêm mới • Chỉnh sửa • Ngừng bán)
+    </h3>
+    {editingProductId && (
+      <span className="text-xs bg-amber-100 text-amber-800 px-3 py-1 rounded-full font-bold">
+        Đang chỉnh sửa sản phẩm #{editingProductId}
+      </span>
+    )}
+  </div>
+
+  {/* Form Thêm mới / Chỉnh sửa sản phẩm */}
+  <form
+    onSubmit={handleSaveProduct}
+    className="bg-stone-50 p-4 rounded-xl border grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 text-xs"
+  >
+    <div>
+      <label className="block text-stone-500 mb-1 font-semibold">Mã SKU</label>
+      <input
+        type="text"
+        placeholder="VD: RAU-004"
+        value={productForm.ma_sku}
+        onChange={(e) => setProductForm({ ...productForm, ma_sku: e.target.value })}
+        className="w-full p-2 border rounded-lg bg-white"
+      />
+    </div>
+
+    <div className="lg:col-span-2">
+      <label className="block text-stone-500 mb-1 font-semibold">Tên nông sản *</label>
+      <input
+        type="text"
+        required
+        placeholder="VD: Cải Kale Hữu Cơ Đà Lạt"
+        value={productForm.ten_san_pham}
+        onChange={(e) => setProductForm({ ...productForm, ten_san_pham: e.target.value })}
+        className="w-full p-2 border rounded-lg bg-white"
+      />
+    </div>
+
+    <div>
+      <label className="block text-stone-500 mb-1 font-semibold">Giá cơ bản (đ) *</label>
+      <input
+        type="number"
+        required
+        min="1000"
+        placeholder="45000"
+        value={productForm.gia_ban_co_ban}
+        onChange={(e) => setProductForm({ ...productForm, gia_ban_co_ban: e.target.value })}
+        className="w-full p-2 border rounded-lg bg-white"
+      />
+    </div>
+
+    <div>
+      <label className="block text-stone-500 mb-1 font-semibold">Đơn vị tính *</label>
+      <input
+        type="text"
+        required
+        placeholder="500g / 1kg"
+        value={productForm.don_vi_tinh}
+        onChange={(e) => setProductForm({ ...productForm, don_vi_tinh: e.target.value })}
+        className="w-full p-2 border rounded-lg bg-white"
+      />
+    </div>
+
+    <div>
+      <label className="block text-stone-500 mb-1 font-semibold">Chứng nhận</label>
+      <select
+        value={productForm.chung_nhan}
+        onChange={(e) => setProductForm({ ...productForm, chung_nhan: e.target.value })}
+        className="w-full p-2 border rounded-lg bg-white"
+      >
+        <option value="VietGAP">VietGAP</option>
+        <option value="USDA Organic">USDA Organic</option>
+        <option value="Hữu cơ PGS">Hữu cơ PGS</option>
+        <option value="GlobalGAP">GlobalGAP</option>
+      </select>
+    </div>
+
+    <div className="sm:col-span-2 lg:col-span-3">
+      <label className="block text-stone-500 mb-1 font-semibold">Link hình ảnh đại diện</label>
+      <input
+        type="text"
+        placeholder="https://..."
+        value={productForm.hinh_anh_dai_dien}
+        onChange={(e) => setProductForm({ ...productForm, hinh_anh_dai_dien: e.target.value })}
+        className="w-full p-2 border rounded-lg bg-white"
+      />
+    </div>
+
+    <div className="sm:col-span-2 lg:col-span-3">
+      <label className="block text-stone-500 mb-1 font-semibold">Mô tả quy trình canh tác</label>
+      <input
+        type="text"
+        placeholder="Mô tả ngắn hiển thị ở trang chi tiết..."
+        value={productForm.mo_ta}
+        onChange={(e) => setProductForm({ ...productForm, mo_ta: e.target.value })}
+        className="w-full p-2 border rounded-lg bg-white"
+      />
+    </div>
+
+    <div className="sm:col-span-2 lg:col-span-6 flex justify-end gap-2 pt-1">
+      {editingProductId && (
+        <button
+          type="button"
+          onClick={resetProductForm}
+          className="px-4 py-2 bg-stone-200 hover:bg-stone-300 text-stone-700 rounded-xl font-bold cursor-pointer"
+        >
+          Hủy sửa
+        </button>
+      )}
+      <button
+        type="submit"
+        className="px-5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-bold cursor-pointer"
+      >
+        {editingProductId ? '💾 Lưu cập nhật' : '+ Thêm sản phẩm mới'}
+      </button>
+    </div>
+  </form>
+
+  {/* Bảng danh sách sản phẩm */}
+  <div className="overflow-x-auto">
+    <table className="w-full text-left border-collapse text-xs">
+      <thead>
+        <tr className="bg-stone-100 text-stone-600 uppercase text-[11px]">
+          <th className="p-2.5">Mã SKU</th>
+          <th className="p-2.5">Sản phẩm</th>
+          <th className="p-2.5">Chứng nhận</th>
+          <th className="p-2.5">Giá cơ bản</th>
+          <th className="p-2.5">Tồn kho</th>
+          <th className="p-2.5">Trạng thái</th>
+          <th className="p-2.5 text-right">Thao tác</th>
+        </tr>
+      </thead>
+      <tbody className="divide-y">
+        {adminProducts.map((p) => (
+          <tr key={p.id} className={!p.dang_ban ? 'bg-stone-50 opacity-70' : ''}>
+            <td className="p-2.5 font-mono font-bold text-stone-600">{p.ma_sku}</td>
+            <td className="p-2.5 flex items-center gap-2.5">
+              <img
+                src={p.hinh_anh_dai_dien}
+                alt={p.ten_san_pham}
+                className="w-9 h-9 rounded-lg object-cover border shrink-0"
+              />
+              <div>
+                <div className="font-bold text-stone-900">{p.ten_san_pham}</div>
+                <div className="text-[11px] text-stone-400">ĐVT: {p.don_vi_tinh}</div>
+              </div>
+            </td>
+            <td className="p-2.5">
+              <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full font-bold text-[11px]">
+                {p.chung_nhan}
+              </span>
+            </td>
+            <td className="p-2.5 font-bold text-stone-800">
+              {Number(p.gia_ban_co_ban).toLocaleString('vi-VN')}đ
+            </td>
+            <td className="p-2.5 font-semibold text-stone-600">
+              {p.ton_kho} {p.don_vi_tinh}
+            </td>
+            <td className="p-2.5">
+              {p.dang_ban ? (
+                <span className="px-2.5 py-0.5 bg-emerald-100 text-emerald-800 rounded-full font-bold text-[11px]">
+                  Đang bán
+                </span>
+              ) : (
+                <span className="px-2.5 py-0.5 bg-red-100 text-red-700 rounded-full font-bold text-[11px]">
+                  Ngừng bán
+                </span>
+              )}
+            </td>
+            <td className="p-2.5 text-right space-x-1.5 whitespace-nowrap">
+              <button
+                type="button"
+                onClick={() => handleStartEditProduct(p)}
+                className="px-2.5 py-1 bg-amber-100 hover:bg-amber-200 text-amber-800 rounded-lg font-bold cursor-pointer"
+              >
+                Sửa
+              </button>
+              <button
+                type="button"
+                onClick={() => handleToggleProductStatus(p)}
+                className={`px-2.5 py-1 rounded-lg font-bold cursor-pointer ${
+                  p.dang_ban
+                    ? 'bg-red-100 hover:bg-red-200 text-red-700'
+                    : 'bg-emerald-100 hover:bg-emerald-200 text-emerald-800'
+                }`}
+              >
+                {p.dang_ban ? 'Ngừng bán' : 'Mở bán lại'}
+              </button>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+</div>
           </div>
+          
           
         )}
 
@@ -709,9 +991,7 @@ const handleDownloadQr = async (batch) => {
                   ))}
                 </tbody>
               </table>
-            </div>
-          </div>
-        )}
+              
               {/* Lịch sử giao dịch cổng thanh toán & Hoàn tiền (Bảng payments) */}
 <div className="bg-white p-5 rounded-2xl shadow-xs border space-y-3">
   <h2 className="font-bold text-sm text-emerald-900">
@@ -758,6 +1038,12 @@ const handleDownloadQr = async (batch) => {
     </table>
   </div>
 </div>
+            </div>
+          </div>
+          
+        )}
+
+        
       </main>
 
     </div>
