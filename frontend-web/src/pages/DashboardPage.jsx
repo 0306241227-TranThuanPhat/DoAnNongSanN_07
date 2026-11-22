@@ -15,6 +15,7 @@ export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState(
     user?.ma_vai_tro === 'farm_staff' ? 'farm' : user?.ma_vai_tro === 'sales' ? 'sales' : 'admin'
   );
+  const [orderFilter, setOrderFilter] = useState('ALL');
 
   // Form Farm Staff: Tạo lô mới
   const [batchForm, setBatchForm] = useState({
@@ -387,39 +388,96 @@ export default function DashboardPage() {
               )}
             </div>
 
-            {/* Danh sách Đơn hàng & Truy vết Lô xuất FEFO (UC-01) */}
-            <div className="bg-white p-5 rounded-2xl shadow-xs border">
-              <h2 className="font-bold text-sm flex items-center gap-2 mb-4">
-                <PackageCheck className="w-5 h-5 text-emerald-700" /> Đơn Hàng & Chi Tiết Phân Bổ Lô Xuất Kho FEFO (UC-01)
-              </h2>
-              <div className="space-y-4">
-                {data.orders.length === 0 ? (
-                  <p className="text-xs text-stone-400">Chưa có đơn hàng nào.</p>
-                ) : data.orders.map(order => (
-                  <div key={order.id} className="border rounded-xl p-4 bg-stone-50/50">
-                    <div className="flex flex-wrap justify-between gap-2 pb-2 border-b">
-                      <div>
-                        <span className="font-mono font-bold text-emerald-800 text-sm">{order.ma_don_hang}</span>
-                        <span className="text-xs text-stone-500 ml-2">• Khách: {order.ten_nguoi_nhan} ({order.so_dien_thoai_nhan})</span>
-                      </div>
-                      <div className="text-xs font-bold text-emerald-700">
-                        {Number(order.tong_thanh_toan).toLocaleString('vi-VN')}đ • {order.trang_thai}
-                      </div>
-                    </div>
-                    <div className="mt-2 space-y-1">
-                      {order.chi_tiet.map(ct => (
-                        <div key={ct.id} className="text-xs flex justify-between bg-white px-3 py-1.5 rounded-lg border">
-                          <span>{ct.ten_san_pham} (SL: <b>{ct.so_luong}</b>)</span>
-                          <span className="font-mono text-amber-800 font-semibold">
-                            Xuất từ lô: {ct.ma_lo || 'Chờ xuất FEFO'} {ct.ngay_het_han ? `(HSD: ${ct.ngay_het_han})` : ''}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
+          {/* Danh sách Đơn hàng & Truy vết Lô xuất FEFO (UC-01 & UC-02) */}
+<div className="bg-white p-5 rounded-2xl shadow-xs border">
+  <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+    <h2 className="font-bold text-sm flex items-center gap-2">
+      <PackageCheck className="w-5 h-5 text-emerald-700" /> Đơn Hàng & Chi Tiết Phân Bổ Lô Xuất Kho FEFO (UC-01 & UC-02)
+    </h2>
+    <div className="flex flex-wrap gap-1.5 text-xs">
+      {[
+        { key: 'ALL', label: 'Tất cả' },
+        { key: 'READY', label: 'Sẵn sàng giao / Đã xác nhận' },
+        { key: 'PENDING', label: 'Chờ giao (Định kỳ)' },
+        { key: 'DELIVERED', label: 'Đã giao' },
+      ].map((tab) => (
+        <button
+          key={tab.key}
+          onClick={() => setOrderFilter(tab.key)}
+          className={`px-3 py-1.5 rounded-lg font-semibold cursor-pointer ${
+            orderFilter === tab.key
+              ? 'bg-emerald-700 text-white'
+              : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+          }`}
+        >
+          {tab.label}
+        </button>
+      ))}
+    </div>
+  </div>
+
+  <div className="space-y-4">
+    {data.orders.length === 0 ? (
+      <p className="text-xs text-stone-400">Chưa có đơn hàng nào.</p>
+    ) : (
+      data.orders
+        .filter((o) => {
+          if (orderFilter === 'READY') return ['Sẵn sàng giao', 'Đã xác nhận'].includes(o.trang_thai);
+          if (orderFilter === 'PENDING') return o.trang_thai === 'Chờ giao';
+          if (orderFilter === 'DELIVERED') return o.trang_thai === 'Đã giao';
+          return true;
+        })
+        .map((order) => (
+          <div key={order.id} className="border rounded-xl p-4 bg-stone-50/50">
+            <div className="flex flex-wrap justify-between gap-2 pb-2 border-b">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-mono font-bold text-emerald-800 text-sm">{order.ma_don_hang}</span>
+                <span
+                  className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
+                    order.loai_don === 'Con'
+                      ? 'bg-teal-100 text-teal-800'
+                      : order.loai_don === 'Bù'
+                      ? 'bg-amber-100 text-amber-800'
+                      : 'bg-blue-100 text-blue-800'
+                  }`}
+                >
+                  {order.loai_don === 'Con'
+                    ? 'Đơn định kỳ'
+                    : order.loai_don === 'Bù'
+                    ? 'Đơn giao bù'
+                    : 'Đơn lẻ'}
+                </span>
+                <span className="text-xs text-stone-500">
+                  • Khách: {order.ten_nguoi_nhan} ({order.so_dien_thoai_nhan})
+                </span>
+              </div>
+              <div className="text-xs font-bold text-emerald-700">
+                {Number(order.tong_thanh_toan).toLocaleString('vi-VN')}đ • {order.trang_thai}
               </div>
             </div>
+
+            <div className="mt-2 space-y-1.5">
+              {order.chi_tiet?.map((ct) => (
+                <div
+                  key={ct.id}
+                  className="flex justify-between items-center text-xs bg-white px-3 py-2 rounded-lg border"
+                >
+                  <span>
+                    {ct.ten_san_pham} (SL: <strong>{ct.so_luong}</strong>)
+                  </span>
+                  <span className="font-semibold text-amber-700">
+                    {ct.ma_lo
+                      ? `Xuất từ lô: ${ct.ma_lo} (HSD: ${ct.ngay_het_han})`
+                      : 'Xuất từ lô: Chờ xuất FEFO'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))
+    )}
+  </div>
+</div>
           </div>
         )}
 
