@@ -16,6 +16,11 @@ export default function DashboardPage() {
     user?.ma_vai_tro === 'farm_staff' ? 'farm' : user?.ma_vai_tro === 'sales' ? 'sales' : 'admin'
   );
   const [orderFilter, setOrderFilter] = useState('ALL');
+  const [selectedQrBatch, setSelectedQrBatch] = useState(null);
+const [docBatchId, setDocBatchId] = useState('');
+const [docTitle, setDocTitle] = useState('');
+const [docFile, setDocFile] = useState(null);
+const [uploadingDoc, setUploadingDoc] = useState(false);
 
   // Form Farm Staff: Tạo lô mới
   const [batchForm, setBatchForm] = useState({
@@ -75,6 +80,46 @@ export default function DashboardPage() {
     alert(res.data.message);
     setLogForm({ ...logForm, ghi_chu: '' });
   };
+  const handleUploadDocument = async (e) => {
+  e.preventDefault();
+  if (!docBatchId || !docFile) {
+    alert('Vui lòng chọn lô thu hoạch và tệp giấy kiểm định (PDF/Ảnh)!');
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append('ten_tai_lieu', docTitle || docFile.name);
+  formData.append('file', docFile);
+
+  setUploadingDoc(true);
+  try {
+    const res = await axios.post(
+      `http://127.0.0.1:8000/api/farm/batches/${docBatchId}/documents`,
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } }
+    );
+    alert(res.data.message);
+    setDocTitle('');
+    setDocFile(null);
+    e.target.reset();
+    loadAll();
+  } catch (err) {
+    alert('Lỗi upload giấy kiểm định: ' + (err.response?.data?.message || err.message));
+  } finally {
+    setUploadingDoc(false);
+  }
+};
+
+const handleDownloadQr = async (batch) => {
+  const traceUrl = `${window.location.origin}/trace/${batch.qr_code}`;
+  const qrImgUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(traceUrl)}`;
+  const response = await fetch(qrImgUrl);
+  const blob = await response.blob();
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = `QR-${batch.ma_lo}.png`;
+  link.click();
+};
 
   const handleCreateWaste = async (e) => {
     e.preventDefault();
@@ -313,7 +358,136 @@ export default function DashboardPage() {
                 </tbody>
               </table>
             </div>
+            {/* Form Upload giấy kiểm định chất lượng (batch_documents) */}
+<form onSubmit={handleUploadDocument} className="bg-white p-5 rounded-2xl shadow-xs border space-y-3">
+  <h2 className="font-bold text-sm text-emerald-800">
+    📄 Đính Kèm Giấy Kiểm Định Chất Lượng Lô (UC-04)
+  </h2>
+  <select
+    value={docBatchId}
+    onChange={(e) => setDocBatchId(e.target.value)}
+    className="w-full border rounded-xl px-3 py-2 text-xs"
+    required
+  >
+    <option value="">-- Chọn lô thu hoạch --</option>
+    {data.batches.map((b) => (
+      <option key={b.id} value={b.id}>
+        {b.ma_lo} — {b.ten_san_pham} (HSD: {b.ngay_het_han})
+      </option>
+    ))}
+  </select>
+  <input
+    type="text"
+    placeholder="Tên giấy kiểm định (VD: Phiếu xét nghiệm dư lượng VietGAP)"
+    value={docTitle}
+    onChange={(e) => setDocTitle(e.target.value)}
+    className="w-full border rounded-xl px-3 py-2 text-xs"
+    required
+  />
+  <input
+    type="file"
+    accept=".pdf,.jpg,.jpeg,.png"
+    onChange={(e) => setDocFile(e.target.files[0])}
+    className="w-full border rounded-xl px-3 py-2 text-xs bg-stone-50"
+    required
+  />
+  <button
+    type="submit"
+    disabled={uploadingDoc}
+    className="w-full py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold cursor-pointer"
+  >
+    {uploadingDoc ? 'Đang tải lên...' : 'Tải lên & Gắn vào mã QR'}
+  </button>
+</form>
+
+{/* Danh sách Lô thu hoạch kèm nút mở ảnh mã QR thật & xem giấy kiểm định */}
+<div className="bg-white p-5 rounded-2xl shadow-xs border space-y-3">
+  <h2 className="font-bold text-sm text-emerald-800">
+    🏷️ Danh Sách Lô Thu Hoạch, Mã QR In Tem & Giấy Kiểm Định
+  </h2>
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+    {data.batches.map((b) => (
+      <div key={b.id} className="border rounded-xl p-3.5 bg-stone-50/60 flex justify-between items-start gap-3">
+        <div className="space-y-1 text-xs">
+          <div className="font-bold text-emerald-900">
+            {b.ma_lo} • {b.ten_san_pham}
           </div>
+          <div className="text-stone-500">
+            Thu hoạch: {b.ngay_thu_hoach} | HSD: {b.ngay_het_han} | Tồn: <strong>{b.so_luong_ton}</strong>
+          </div>
+          {b.documents?.length > 0 && (
+            <div className="pt-1 flex flex-wrap gap-1.5">
+              {b.documents.map((doc) => (
+                <a
+                  key={doc.id}
+                  href={doc.file_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-semibold hover:underline"
+                >
+                  📎 {doc.ten_tai_lieu || doc.tieu_de || 'Giấy kiểm định'}
+                </a>
+              ))}
+            </div>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={() => setSelectedQrBatch(b)}
+          className="px-3 py-1.5 rounded-lg bg-teal-700 hover:bg-teal-800 text-white text-xs font-bold shrink-0 cursor-pointer"
+        >
+          Xem / In QR
+        </button>
+      </div>
+    ))}
+  </div>
+</div>
+
+{/* Popup hiển thị ảnh mã QR thật để tải về in tem */}
+{selectedQrBatch && (
+  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+    <div className="bg-white rounded-2xl p-6 max-w-sm w-full text-center space-y-3 shadow-xl">
+      <h3 className="font-bold text-emerald-900">Tem QR Truy Xuất Nguồn Gốc</h3>
+      <p className="text-xs text-stone-600">
+        Lô <strong>{selectedQrBatch.ma_lo}</strong> — {selectedQrBatch.ten_san_pham}
+      </p>
+      <img
+        src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(
+          `${window.location.origin}/trace/${selectedQrBatch.qr_code}`
+        )}`}
+        alt="QR Code"
+        className="mx-auto border p-2 rounded-xl"
+      />
+      <p className="text-[11px] font-mono text-stone-500 break-all">{selectedQrBatch.qr_code}</p>
+      <div className="flex gap-2 pt-2">
+        <button
+          type="button"
+          onClick={() => handleDownloadQr(selectedQrBatch)}
+          className="flex-1 py-2 rounded-xl bg-emerald-700 text-white text-xs font-bold cursor-pointer"
+        >
+          ⬇ Tải ảnh PNG in tem
+        </button>
+        <a
+          href={`/trace/${selectedQrBatch.qr_code}`}
+          target="_blank"
+          rel="noreferrer"
+          className="flex-1 py-2 rounded-xl bg-amber-600 text-white text-xs font-bold"
+        >
+          Mở trang quét thử
+        </a>
+      </div>
+      <button
+        type="button"
+        onClick={() => setSelectedQrBatch(null)}
+        className="w-full py-1.5 text-xs text-stone-500 hover:underline cursor-pointer"
+      >
+        Đóng
+      </button>
+    </div>
+  </div>
+)}
+          </div>
+          
         )}
 
         {/* ================= PHÂN HỆ 2: SALES (UC-01 FEFO, UC-03 KHIẾU NẠI & UC-06 FLASH SALE) ================= */}

@@ -185,10 +185,14 @@ Route::post('/register', function (Request $request) {
 // 5. API Tổng hợp dữ liệu cho Dashboard (Admin, Sales, Farm Staff)
 Route::get('/dashboard/overview', function () {
     $batches = DB::table('batches')
-        ->join('products', 'batches.product_id', '=', 'products.id')
-        ->select('batches.*', 'products.ten_san_pham', 'products.gia_ban_co_ban')
-        ->orderBy('batches.ngay_het_han', 'asc')
-        ->get();
+    ->join('products', 'batches.product_id', '=', 'products.id')
+    ->select('batches.*', 'products.ten_san_pham', 'products.gia_ban_co_ban')
+    ->orderBy('batches.ngay_het_han', 'asc')
+    ->get()
+    ->map(function ($b) {
+        $b->documents = DB::table('batch_documents')->where('batch_id', $b->id)->get();
+        return $b;
+    });
 
     $orders = DB::table('orders')
         ->orderBy('id', 'desc')
@@ -662,5 +666,47 @@ Route::post('/scheduler/run-now', function () {
 
     return response()->json([
         'message' => trim(Artisan::output()),
+    ]);
+});
+
+// 17. Farm Staff: Upload giấy kiểm định / chứng nhận chất lượng cho lô (UC-04)
+Route::post('/farm/batches/{batchId}/documents', function (Request $request, $batchId) {
+    $request->validate([
+        'file' => 'required|file|mimes:pdf,jpg,jpeg,png|max:5120',
+    ]);
+
+    $file = $request->file('file');
+    $path = $file->store('batch-documents', 'public');
+    $fileUrl = asset('storage/' . $path);
+    $tenTaiLieu = $request->input('ten_tai_lieu') ?: $file->getClientOriginalName();
+
+    $columns = \Illuminate\Support\Facades\Schema::getColumns('batch_documents');
+    $colNames = array_column($columns, 'name');
+
+    $data = [
+        'batch_id' => $batchId,
+        'file_url' => $fileUrl,
+    ];
+
+    if (in_array('farm_staff_id', $colNames)) $data['farm_staff_id'] = $request->input('farm_staff_id', 2);
+    if (in_array('ten_giay_to', $colNames)) $data['ten_giay_to'] = $tenTaiLieu;
+    if (in_array('ten_tai_lieu', $colNames)) $data['ten_tai_lieu'] = $tenTaiLieu;
+    if (in_array('loai_tai_lieu', $colNames)) $data['loai_tai_lieu'] = 'Giấy kiểm định chất lượng';
+    if (in_array('loai_file', $colNames)) $data['loai_file'] = strtoupper($file->getClientOriginalExtension());
+
+    // Tự động cấp giá trị an toàn nếu bảng còn cột NOT NULL chưa có mặc định
+    foreach ($columns as $col) {
+        $name = $col['name'];
+        if (!isset($data[$name]) && !$col['nullable'] && $col['default'] === null && !$col['auto_increment']) {
+            $data[$name] = str_contains($col['type_name'], 'int') ? 1 : $tenTaiLieu;
+        }
+    }
+
+    $id = DB::table('batch_documents')->insertGetId($data);
+
+    return response()->json([
+        'message' => 'Đã đính kèm giấy kiểm định chất lượng lên mã QR của lô!',
+        'id' => $id,
+        'file_url' => $fileUrl,
     ]);
 });

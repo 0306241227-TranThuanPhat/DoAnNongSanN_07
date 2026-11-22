@@ -102,6 +102,26 @@ export default function TracePage() {
               </div>
             ))}
           </div>
+          {data.documents?.length > 0 && (
+  <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 space-y-2">
+    <h3 className="font-bold text-sm text-emerald-900">
+      ✅ Hồ Sơ Kiểm Định & Chứng Nhận Chất Lượng Lô Hàng
+    </h3>
+    <div className="flex flex-wrap gap-2">
+      {data.documents.map((doc) => (
+        <a
+          key={doc.id}
+          href={doc.file_url}
+          target="_blank"
+          rel="noreferrer"
+          className="px-3 py-1.5 rounded-xl bg-white border border-emerald-300 text-xs font-bold text-emerald-800 hover:bg-emerald-100"
+        >
+          📄 Xem {doc.ten_giay_to || doc.ten_tai_lieu || 'Giấy kiểm định'}
+        </a>
+      ))}
+    </div>
+  </div>
+)}
         </div>
       </div>
     </div>
