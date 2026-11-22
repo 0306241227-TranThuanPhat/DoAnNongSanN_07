@@ -23,7 +23,24 @@ export default function HomePage() {
   });
   const [orderMessage, setOrderMessage] = useState('');
   const [paymentSession, setPaymentSession] = useState(null);
-  // Ví dụ khi bấm đặt hàng từ giỏ hàng:
+  const [selectedProduct, setSelectedProduct] = useState(null);
+const [detailQty, setDetailQty] = useState(1);
+const [purchaseMode, setPurchaseMode] = useState('once');
+
+const handleAddFromDetail = (product, qty) => {
+  setCart((prev) => {
+    const exists = prev.find((i) => i.id === product.id);
+    if (exists) {
+      return prev.map((i) =>
+        i.id === product.id
+          ? { ...i, quantity: Math.min(product.ton_kho_kha_dung, i.quantity + qty) }
+          : i
+      );
+    }
+    return [...prev, { ...product, quantity: qty }];
+  });
+  setSelectedProduct(null);
+};
 
 
 
@@ -252,7 +269,14 @@ const handlePaymentSuccess = async ({ phuong_thuc, ma_giao_dich_cong }) => {
             const isFlashSale = Number(p.gia_hien_tai) < Number(p.gia_ban_co_ban);
             return (
               <div key={p.id} className="bg-white rounded-2xl overflow-hidden border border-stone-200/80 shadow-xs hover:shadow-md transition flex flex-col">
-                <div className="relative h-52 bg-stone-100">
+               <div
+                  onClick={() => {
+                  setSelectedProduct(p);
+                  setDetailQty(1);
+                  }}
+                  title="Bấm để xem chi tiết & truy xuất nguồn gốc"
+                  className="relative h-52 bg-stone-100 cursor-pointer group"
+                    >
                   <img src={p.hinh_anh_dai_dien} alt={p.ten_san_pham} className="w-full h-full object-cover" />
                   {isFlashSale && (
                     <span className="absolute top-3 left-3 bg-red-600 text-white text-[11px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1 shadow">
@@ -401,6 +425,318 @@ const handlePaymentSuccess = async ({ phuong_thuc, ma_giao_dich_cong }) => {
           </div>
         </div>
       )}
+      {/* Modal Xem Chi Tiết Sản Phẩm chuẩn giao diện Single Farm */}
+{selectedProduct && (() => {
+  const basePrice = Number(selectedProduct.gia_hien_tai || selectedProduct.gia_ban_co_ban || 0);
+  const activePrice = purchaseMode === 'sub' ? Math.round(basePrice * 0.88) : basePrice;
+  const batch = selectedProduct.lo_uu_tien;
+  const daysLeft = batch?.ngay_het_han
+    ? Math.max(1, Math.ceil((new Date(batch.ngay_het_han) - new Date()) / (1000 * 60 * 60 * 24)))
+    : 4;
+
+  const formatDateVN = (dateStr, fallback) => {
+    if (!dateStr) return fallback;
+    const parts = String(dateStr).split(' ')[0].split('-');
+    return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : dateStr;
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 md:p-6 overflow-y-auto"
+      onClick={() => setSelectedProduct(null)}
+    >
+      <div
+        className="relative bg-[#F7F8F3] rounded-3xl max-w-5xl w-full p-4 md:p-6 shadow-2xl border border-stone-200 my-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Nút đóng góc phải */}
+        <button
+          type="button"
+          onClick={() => setSelectedProduct(null)}
+          title="Đóng"
+          className="absolute top-3 right-3 z-10 w-8 h-8 rounded-full bg-white hover:bg-stone-100 border border-stone-200 text-stone-500 hover:text-stone-800 flex items-center justify-center text-sm font-bold shadow-xs cursor-pointer"
+        >
+          ✕
+        </button>
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+          {/* CỘT TRÁI (5/12): Ảnh + Mô tả & Bảng so sánh Siêu thị */}
+          <div className="lg:col-span-5 space-y-4">
+            {/* Thẻ ảnh & mô tả nền kem */}
+            <div className="bg-[#EEF2E6] rounded-2xl overflow-hidden border border-stone-200/80 shadow-xs">
+              <div className="relative h-64 bg-stone-200">
+                <img
+                  src={selectedProduct.hinh_anh_dai_dien}
+                  alt={selectedProduct.ten_san_pham}
+                  className="w-full h-full object-cover"
+                />
+                {selectedProduct.chung_nhan && (
+                  <span className="absolute top-3 left-3 bg-[#1E5631] text-white text-xs font-bold px-3 py-1 rounded-full shadow flex items-center gap-1">
+                    ✓ {selectedProduct.chung_nhan}
+                  </span>
+                )}
+                {batch && (
+                  <span className="absolute bottom-3 left-3 bg-white/95 backdrop-blur-xs text-stone-800 text-[11px] font-bold px-3 py-1 rounded-full shadow border border-stone-200">
+                    FEFO Ưu tiên xuất • Lô #{batch.ma_lo}
+                  </span>
+                )}
+              </div>
+              <div className="p-4 text-xs text-stone-600 leading-relaxed">
+                {selectedProduct.mo_ta ||
+                  'Nông sản hữu cơ trồng hoàn toàn trên giá thể sạch tại nhà màng, tưới nước lọc nhỏ giọt. Thu hoạch lúc bình minh và làm mát chân không ngay tại vườn.'}
+              </div>
+            </div>
+
+            {/* Thẻ Khác biệt Nông Trại Xanh vs Siêu thị */}
+            <div className="bg-white rounded-2xl border border-stone-200/80 p-4 space-y-2.5 shadow-xs">
+              <div className="text-xs font-extrabold text-[#1E5631] flex items-center gap-1.5">
+                <span>✨</span> Khác biệt Nông Trại Xanh vs Siêu thị
+              </div>
+
+              <div className="space-y-2 text-[11px]">
+                <div className="grid grid-cols-12 items-center bg-[#F6F8F2] rounded-xl px-3 py-2 gap-1">
+                  <span className="col-span-4 font-semibold text-stone-600">Độ tươi thu hoạch</span>
+                  <span className="col-span-4 font-bold text-[#1E5631]">🕒 Thu sáng 05:30</span>
+                  <span className="col-span-4 text-right text-stone-400 line-through">Lưu kho 3–5 ngày</span>
+                </div>
+
+                <div className="grid grid-cols-12 items-center bg-[#F6F8F2] rounded-xl px-3 py-2 gap-1">
+                  <span className="col-span-4 font-semibold text-stone-600">Minh bạch nguồn gốc</span>
+                  <span className="col-span-4 font-bold text-[#1E5631]">🔍 Nhật ký QR từng ngày</span>
+                  <span className="col-span-4 text-right text-stone-400 line-through">Không rõ vườn trồng</span>
+                </div>
+
+                <div className="grid grid-cols-12 items-center bg-[#F6F8F2] rounded-xl px-3 py-2 gap-1">
+                  <span className="col-span-4 font-semibold text-stone-600">Quản lý hạn dùng</span>
+                  <span className="col-span-4 font-bold text-[#1E5631]">🛡️ FEFO công khai lô</span>
+                  <span className="col-span-4 text-right text-stone-400 line-through">Xếp lẫn lô cũ mới</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* CỘT PHẢI (7/12): Thông tin sản phẩm, Lô FEFO & Mua hàng */}
+          <div className="lg:col-span-7 bg-white rounded-2xl border border-stone-200/80 p-5 md:p-6 space-y-4 shadow-xs">
+            {/* Dòng danh mục & đánh giá */}
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+              <span className="font-extrabold uppercase tracking-wider text-[#2E7D32]">
+                {selectedProduct.danh_muc || selectedProduct.ma_sku || 'RAU ĂN LÁ'}
+              </span>
+              <div className="text-stone-500 flex items-center gap-1.5">
+                <span className="font-bold text-amber-500">★ 4.9</span>
+                <span>• Đã bán 428</span>
+                <span>
+                  • Tồn lô:{' '}
+                  <strong className="text-stone-700">
+                    {selectedProduct.ton_kho_kha_dung} {selectedProduct.don_vi_tinh}
+                  </strong>
+                </span>
+              </div>
+            </div>
+
+            {/* Tên sản phẩm */}
+            <h2 className="text-xl md:text-2xl font-extrabold text-stone-900 leading-tight">
+              {selectedProduct.ten_san_pham}
+            </h2>
+
+            {/* Giá bán */}
+            <div className="flex items-baseline gap-2">
+              <span className="text-2xl md:text-3xl font-extrabold text-[#1E5631]">
+                {activePrice.toLocaleString('vi-VN')}đ
+              </span>
+              <span className="text-xs text-stone-500">/ {selectedProduct.don_vi_tinh}</span>
+              {(purchaseMode === 'sub' || basePrice < Number(selectedProduct.gia_ban_co_ban)) && (
+                <span className="text-xs line-through text-stone-400">
+                  {Number(selectedProduct.gia_ban_co_ban).toLocaleString('vi-VN')}đ
+                </span>
+              )}
+            </div>
+
+            {/* Khung THÔNG TIN LÔ HÀNG ĐANG BÁN (FEFO) */}
+            <div className="bg-[#F1F7F1] border border-emerald-200/90 rounded-2xl p-4 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-xs font-extrabold text-[#1E5631] uppercase tracking-wide flex items-center gap-1.5">
+                  <span>🛡️</span> THÔNG TIN LÔ HÀNG ĐANG BÁN (FEFO)
+                </div>
+                <span className="bg-[#DCEFD8] text-[#1E5631] text-[11px] font-bold px-2.5 py-0.5 rounded-full">
+                  Tươi mới • Còn {daysLeft} ngày
+                </span>
+              </div>
+
+              {batch ? (
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-stretch">
+                  {/* 4 ô thông số lô */}
+                  <div className="sm:col-span-8 grid grid-cols-2 gap-2.5">
+                    <div className="bg-white rounded-xl p-2.5 border border-emerald-100">
+                      <div className="text-[11px] text-stone-400">Mã lô đang xuất</div>
+                      <div className="text-xs font-extrabold text-stone-800 mt-0.5">
+                        {batch.ma_lo}
+                      </div>
+                    </div>
+
+                    <div className="bg-white rounded-xl p-2.5 border border-emerald-100">
+                      <div className="text-[11px] text-stone-400">Ngày & giờ thu hoạch</div>
+                      <div className="text-xs font-extrabold text-stone-800 mt-0.5">
+                        {formatDateVN(batch.ngay_thu_hoach, '20/11/2026')} • 05:30
+                      </div>
+                    </div>
+
+                    <div className="bg-white rounded-xl p-2.5 border border-emerald-100">
+                      <div className="text-[11px] text-stone-400">Hạn sử dụng chuẩn</div>
+                      <div className="text-xs font-extrabold text-red-600 mt-0.5">
+                        {formatDateVN(batch.ngay_het_han, '24/11/2026')} (4°C - 6°C)
+                      </div>
+                    </div>
+
+                    <div className="bg-white rounded-xl p-2.5 border border-emerald-100">
+                      <div className="text-[11px] text-stone-400">Khu vực canh tác</div>
+                      <div className="text-xs font-extrabold text-stone-800 mt-0.5">
+                        {batch.khu_vuc || 'Nhà màng A2 — Lạc Dương, Đà Lạt'}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Khung mã QR & nút Xem phiếu QR */}
+                  <div className="sm:col-span-4 bg-white rounded-xl p-2.5 border border-emerald-100 flex flex-col items-center justify-between text-center">
+                    <div className="p-1.5 border border-stone-200 rounded-lg bg-white">
+                      {/* Biểu tượng QR sắc nét */}
+                      <svg viewBox="0 0 36 36" className="w-14 h-14 text-stone-800 fill-current">
+                        <path d="M2 2h10v10H2V2zm2 2v6h6V4H4zm2 2h2v2H6V6zm18-4h10v10H24V2zm2 2v6h6V4h-6zm2 2h2v2h-2V6zM2 24h10v10H2V24zm2 2v6h6v-6H4zm2 2h2v2H6v-2zm10-24h2v4h-2V4zm4 2h2v4h-2V6zm-4 6h4v2h-4v-2zm-2 4h6v2h-6v-2zm8 0h2v4h-2v-4zm4 2h4v2h-4v-2zm-12 4h4v2h-4v-2zm6 2h4v4h-4v-4zm6 0h4v2h-4v-2zm-12 4h2v6h-2v-6zm4 2h4v4h-4v-4zm6 2h6v2h-6v-2z" />
+                      </svg>
+                    </div>
+                    <div className="text-[10px] text-stone-500 mt-1">Mã QR Truy Xuất</div>
+                    <a
+                      href={`/trace/${batch.qr_code}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-1 w-full py-1.5 px-2 bg-[#1E5631] hover:bg-[#164225] text-white rounded-lg text-[11px] font-bold transition"
+                    >
+                      Xem phiếu QR
+                    </a>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-xs text-stone-500 bg-white rounded-xl p-3 border">
+                  Hiện chưa có lô hàng khả dụng cho sản phẩm này.
+                </div>
+              )}
+
+              {/* Thanh độ tươi 98% */}
+              <div className="pt-1 space-y-1">
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="text-[#1E5631] font-semibold">
+                    ✓ 0% dư lượng thuốc BVTV • Đạt chuẩn Vi sinh
+                  </span>
+                  <span className="font-extrabold text-[#1E5631]">Độ tươi: 98%</span>
+                </div>
+                <div className="w-full h-1.5 bg-emerald-200/70 rounded-full overflow-hidden">
+                  <div className="h-full bg-[#2E7D32] rounded-full w-[98%]" />
+                </div>
+              </div>
+            </div>
+
+            {/* Tab chuyển đổi Mua lẻ 1 lần / Gói định kỳ (-12%) */}
+            <div className="grid grid-cols-2 bg-stone-100 p-1 rounded-xl border border-stone-200/80 text-xs font-bold">
+              <button
+                type="button"
+                onClick={() => setPurchaseMode('once')}
+                className={`py-2.5 rounded-lg flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                  purchaseMode === 'once'
+                    ? 'bg-white text-stone-900 shadow-xs'
+                    : 'text-stone-500 hover:text-stone-800'
+                }`}
+              >
+                <span>🛒</span> Mua lẻ 1 lần
+              </button>
+              <button
+                type="button"
+                onClick={() => setPurchaseMode('sub')}
+                className={`py-2.5 rounded-lg flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                  purchaseMode === 'sub'
+                    ? 'bg-white text-[#1E5631] shadow-xs'
+                    : 'text-stone-500 hover:text-stone-800'
+                }`}
+              >
+                <span>🔄</span> Gói định kỳ (-12%)
+              </button>
+            </div>
+
+            {/* Hàng chọn số lượng + Thêm vào giỏ + Mua ngay */}
+            {Number(selectedProduct.ton_kho_kha_dung) > 0 ? (
+              <div className="flex flex-wrap sm:flex-nowrap items-center gap-2.5 pt-1">
+                {/* Bộ tăng giảm số lượng */}
+                <div className="flex items-center border border-stone-200 rounded-xl bg-white overflow-hidden shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setDetailQty((q) => Math.max(1, q - 1))}
+                    className="w-9 h-10 hover:bg-stone-100 font-bold text-stone-600 cursor-pointer"
+                  >
+                    −
+                  </button>
+                  <span className="w-9 text-center text-xs font-extrabold text-stone-900">
+                    {detailQty}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDetailQty((q) =>
+                        Math.min(Number(selectedProduct.ton_kho_kha_dung), q + 1)
+                      )
+                    }
+                    className="w-9 h-10 hover:bg-stone-100 font-bold text-stone-600 cursor-pointer"
+                  >
+                    +
+                  </button>
+                </div>
+
+                {/* Nút Thêm vào giỏ */}
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleAddFromDetail(
+                      { ...selectedProduct, gia_hien_tai: activePrice },
+                      detailQty
+                    )
+                  }
+                  className="flex-1 h-10 px-4 bg-[#76A32E] hover:bg-[#648c25] text-white rounded-xl text-xs font-extrabold shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <span>🛒</span>
+                  <span>
+                    Thêm vào giỏ • {(activePrice * detailQty).toLocaleString('vi-VN')}đ
+                  </span>
+                </button>
+
+                {/* Nút Mua ngay */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const instantCart = [
+                      { ...selectedProduct, gia_hien_tai: activePrice, quantity: detailQty },
+                    ];
+                    setCart(instantCart);
+                    setSelectedProduct(null);
+                    setPaymentSession({
+                      type: 'ORDER',
+                      amount: activePrice * detailQty,
+                      description: `Mua ngay ${selectedProduct.ten_san_pham} (x${detailQty})`,
+                    });
+                  }}
+                  className="h-10 px-5 bg-[#1E5631] hover:bg-[#164225] text-white rounded-xl text-xs font-extrabold shadow-xs transition shrink-0 cursor-pointer"
+                >
+                  Mua ngay
+                </button>
+              </div>
+            ) : (
+              <div className="text-center py-2.5 bg-stone-100 text-stone-500 rounded-xl text-xs font-bold">
+                Sản phẩm tạm hết hàng
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+})()}
       <PaymentGatewayModal
   isOpen={!!paymentSession}
   amount={paymentSession?.amount || 0}
@@ -415,5 +751,6 @@ const handlePaymentSuccess = async ({ phuong_thuc, ma_giao_dich_cong }) => {
     </div>
     
   );
+  
   
 }
