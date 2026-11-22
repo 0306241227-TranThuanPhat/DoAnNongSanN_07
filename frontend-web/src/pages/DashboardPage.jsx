@@ -712,7 +712,55 @@ const handleDownloadQr = async (batch) => {
             </div>
           </div>
         )}
+              {/* Lịch sử giao dịch cổng thanh toán & Hoàn tiền (Bảng payments) */}
+<div className="bg-white p-5 rounded-2xl shadow-xs border space-y-3">
+  <h2 className="font-bold text-sm text-emerald-900">
+    💳 Lịch Sử Giao Dịch Thanh Toán & Hoàn Tiền (Bảng payments)
+  </h2>
+  <div className="overflow-x-auto">
+    <table className="w-full text-xs text-left border-collapse">
+      <thead>
+        <tr className="border-b bg-stone-50 text-stone-600">
+          <th className="p-2.5">Mã GD Cổng</th>
+          <th className="p-2.5">Đối tượng</th>
+          <th className="p-2.5">Loại GD</th>
+          <th className="p-2.5">Cổng TT</th>
+          <th className="p-2.5">Số tiền</th>
+          <th className="p-2.5">Trạng thái</th>
+        </tr>
+      </thead>
+      <tbody>
+        {(data.payments || []).map((p) => (
+          <tr key={p.id} className="border-b hover:bg-stone-50">
+            <td className="p-2.5 font-mono font-bold text-blue-800">
+              {p.ma_giao_dich_cong || `GD-${p.id}`}
+            </td>
+            <td className="p-2.5">
+              {p.ma_don_hang ? `Đơn ${p.ma_don_hang}` : p.goi_id ? `Gói định kỳ #${p.goi_id}` : '-'}
+            </td>
+            <td className="p-2.5">
+              <span
+                className={`px-2 py-0.5 rounded-full font-bold ${
+                  p.loai_giao_dich === 'Hoàn tiền'
+                    ? 'bg-amber-100 text-amber-800'
+                    : 'bg-emerald-100 text-emerald-800'
+                }`}
+              >
+                {p.loai_giao_dich}
+              </span>
+            </td>
+            <td className="p-2.5 font-semibold">{p.phuong_thuc}</td>
+            <td className="p-2.5 font-bold">{Number(p.so_tien).toLocaleString('vi-VN')}đ</td>
+            <td className="p-2.5 text-emerald-700 font-semibold">{p.trang_thai}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+</div>
       </main>
+
     </div>
+    
   );
 }

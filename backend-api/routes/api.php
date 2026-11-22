@@ -95,7 +95,21 @@ Route::post('/orders/checkout', function (Request $request) {
             'phi_van_chuyen' => $request->input('phi_van_chuyen', 0),
             'tong_thanh_toan' => $request->input('tong_thanh_toan', 0),
         ]);
+        $phuongThuc = $request->input('phuong_thuc', 'VNPay');
+        $maGiaoDichCong = $request->input('ma_giao_dich_cong')
+            ?? (($phuongThuc === 'MoMo' ? 'MOMO-' : 'VNP-') . now()->format('YmdHis'));
 
+        // Ghi nhận lịch sử thanh toán vào bảng payments
+        DB::table('payments')->insert([
+            'order_id' => $orderId,
+            'loai_giao_dich' => 'Thanh toán',
+            'phuong_thuc' => $phuongThuc,
+            'so_tien' => $request->input('tong_thanh_toan', 0),
+            'trang_thai' => 'Thành công',
+            'ma_giao_dich_cong' => $maGiaoDichCong,
+            'thoi_gian_thanh_toan' => now(),
+            'ghi_chu' => "Thanh toán đơn lẻ qua cổng {$phuongThuc} Sandbox",
+        ]);
         foreach ($items as $item) {
             $conCan = $item['quantity'];
 
@@ -219,11 +233,23 @@ Route::get('/dashboard/overview', function () {
     $tongNhap = $batches->sum('so_luong_nhap');
     $tongHaoHut = $batches->sum('so_luong_hao_hut');
     $tyLeHaoHut = $tongNhap > 0 ? round(($tongHaoHut / $tongNhap) * 100, 2) : 0;
+    $payments = DB::table('payments')
+        ->leftJoin('orders', 'payments.order_id', '=', 'orders.id')
+        ->leftJoin('subscriptions', 'payments.subscription_id', '=', 'subscriptions.id')
+        ->select(
+            'payments.*',
+            'orders.ma_don_hang',
+            'subscriptions.id as goi_id'
+        )
+        ->orderBy('payments.id', 'desc')
+        ->limit(30)
+        ->get();
 
     return response()->json([
         'batches' => $batches,
         'orders' => $orders,
         'waste_records' => $wasteRecords,
+        'payments' => $payments,
         'stats' => [
             'tong_doanh_thu' => $orders->where('trang_thai', '!=', 'Đã hủy')->sum('tong_thanh_toan'),
             'tong_don_hang' => $orders->count(),
@@ -629,7 +655,7 @@ Route::post('/sales/complaints/{id}/resolve', function (Request $request, $id) {
     });
 });
 
-// 16. Kích hoạt chạy thử Scheduler 18:00 ngay lập tức để demo (UC-02 & UC-06)
+
 // 16. Kích hoạt chạy thử Scheduler 18:00 ngay lập tức để demo (UC-02 & UC-06)
 Route::post('/scheduler/run-now', function () {
     $tomorrow = now()->addDay()->toDateString();

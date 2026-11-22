@@ -5,7 +5,7 @@ import {
   ShoppingBag, Search, QrCode, ShieldCheck, Plus, Minus, X,
   CheckCircle2, User, LayoutDashboard, LogOut, Copy, Sparkles
 } from 'lucide-react';
-
+import PaymentGatewayModal from '../components/PaymentGatewayModal';
 export default function HomePage() {
   const [products, setProducts] = useState([]);
   const [search, setSearch] = useState('');
@@ -22,6 +22,10 @@ export default function HomePage() {
     dia_chi_giao: '',
   });
   const [orderMessage, setOrderMessage] = useState('');
+  const [paymentSession, setPaymentSession] = useState(null);
+  // Ví dụ khi bấm đặt hàng từ giỏ hàng:
+
+
 
   const fetchProducts = () => {
     axios.get('http://127.0.0.1:8000/api/products')
@@ -66,26 +70,39 @@ export default function HomePage() {
   const shipFee = subTotal >= 500000 || subTotal === 0 ? 0 : 25000;
   const totalAmount = subTotal + shipFee;
 
-  const handleCheckout = async (e) => {
-    e.preventDefault();
-    try {
-      const res = await axios.post('http://127.0.0.1:8000/api/orders/checkout', {
-        user_id: user?.id || null,
-        ten_nguoi_nhan: checkoutForm.ten_nguoi_nhan,
-        so_dien_thoai_nhan: checkoutForm.so_dien_thoai_nhan,
-        dia_chi_giao: checkoutForm.dia_chi_giao,
-        tong_tien_hang: subTotal,
-        phi_van_chuyen: shipFee,
-        tong_thanh_toan: totalAmount,
-        items: cart,
-      });
-      setOrderMessage(res.data.message);
-      setCart([]);
-      fetchProducts(); // Cập nhật lại tồn kho sau khi trừ FEFO
-    } catch (err) {
-      alert(err.response?.data?.message || 'Có lỗi khi đặt hàng!');
-    }
-  };
+ const handleCheckout = (e) => {
+  e.preventDefault();
+  if (cart.length === 0) return;
+
+  setPaymentSession({
+    type: 'ORDER',
+    amount: totalAmount,
+    description: `Thanh toán đơn hàng Single Farm (${cart.length} sản phẩm)`,
+  });
+};
+
+const handlePaymentSuccess = async ({ phuong_thuc, ma_giao_dich_cong }) => {
+  try {
+    const res = await axios.post('http://127.0.0.1:8000/api/orders/checkout', {
+      user_id: user?.id || null,
+      ten_nguoi_nhan: checkoutForm.ten_nguoi_nhan,
+      so_dien_thoai_nhan: checkoutForm.so_dien_thoai_nhan,
+      dia_chi_giao: checkoutForm.dia_chi_giao,
+      tong_tien_hang: subTotal,
+      phi_van_chuyen: shipFee,
+      tong_thanh_toan: totalAmount,
+      phuong_thuc,
+      ma_giao_dich_cong,
+      items: cart,
+    });
+    setPaymentSession(null);
+    setOrderMessage(`${res.data.message} (Mã GD ${phuong_thuc}: ${ma_giao_dich_cong})`);
+    setCart([]);
+    fetchProducts();
+  } catch (err) {
+    alert(err.response?.data?.message || 'Có lỗi khi đặt hàng!');
+  }
+};
 
   const filteredProducts = products.filter(p => {
     const matchName = p.ten_san_pham.toLowerCase().includes(search.toLowerCase());
@@ -384,6 +401,16 @@ export default function HomePage() {
           </div>
         </div>
       )}
+      <PaymentGatewayModal
+  isOpen={!!paymentSession}
+  amount={paymentSession?.amount || 0}
+  description={paymentSession?.description}
+  onSuccess={handlePaymentSuccess}
+  onClose={() => {
+    alert('Giao dịch đã bị hủy. Đơn hàng chưa được tạo và kho chưa bị trừ.');
+    setPaymentSession(null);
+  }}
+/>
       
     </div>
     
