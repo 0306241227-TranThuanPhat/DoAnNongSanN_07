@@ -120,7 +120,7 @@ export default function CustomerPortalPage() {
                 tab === 'subscriptions' ? 'bg-amber-400 text-emerald-950' : 'bg-emerald-800 text-white'
               }`}
             >
-              <CalendarClock className="w-4 h-4" /> Gói Rau Định Kỳ (UC-02)
+              <CalendarClock className="w-4 h-4" /> Gói Rau Định Kỳ 
             </button>
           </div>
         </div>

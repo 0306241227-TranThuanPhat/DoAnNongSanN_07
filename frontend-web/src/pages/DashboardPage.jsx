@@ -311,7 +311,7 @@ const handleDownloadQr = async (batch) => {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <form onSubmit={handleCreateBatch} className="bg-white p-5 rounded-2xl shadow-xs border space-y-3">
                 <h2 className="font-bold text-sm flex items-center gap-2 text-emerald-800">
-                  <PlusCircle className="w-4 h-4" /> Tạo Lô Thu Hoạch & Sinh QR (UC-04)
+                  <PlusCircle className="w-4 h-4" /> Tạo Lô Thu Hoạch & Sinh QR 
                 </h2>
                 <select
                   value={batchForm.product_id}
@@ -375,7 +375,7 @@ const handleDownloadQr = async (batch) => {
 
               <form onSubmit={handleCreateWaste} className="bg-white p-5 rounded-2xl shadow-xs border space-y-3">
                 <h2 className="font-bold text-sm flex items-center gap-2 text-red-700">
-                  <Trash2 className="w-4 h-4" /> Ghi Nhận Xuất Hủy / Hao Hụt (UC-05)
+                  <Trash2 className="w-4 h-4" /> Ghi Nhận Xuất Hủy / Hao Hụt 
                 </h2>
                 <select
                   value={wasteForm.batch_id}
@@ -778,7 +778,7 @@ const handleDownloadQr = async (batch) => {
             {/* Cảnh báo lô cận hạn (UC-06) */}
             <div className="bg-red-50 border border-red-200 rounded-2xl p-5">
               <h2 className="font-extrabold text-red-800 text-sm flex items-center gap-2">
-                <AlertTriangle className="w-5 h-5 text-red-600" /> Cảnh Báo Lô Cận Hạn (≤ 2 Ngày) — Cần Xả Hàng (UC-06)
+                <AlertTriangle className="w-5 h-5 text-red-600" /> Cảnh Báo Lô Cận Hạn (≤ 2 Ngày) — Cần Xả Hàng 
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
                 {nearExpiryBatches.map(b => (
@@ -805,7 +805,7 @@ const handleDownloadQr = async (batch) => {
 
             {/* Danh sách Khiếu nại cần xử lý (UC-03) */}
             <div className="bg-white p-5 rounded-2xl shadow-xs border border-amber-200">
-              <h2 className="font-bold text-sm text-red-700 mb-3">Danh Sách Khiếu Nại Cần Xử Lý (UC-03)</h2>
+              <h2 className="font-bold text-sm text-red-700 mb-3">Danh Sách Khiếu Nại Cần Xử Lý </h2>
               {complaints.length === 0 ? (
                 <p className="text-xs text-stone-400">Chưa có yêu cầu khiếu nại nào.</p>
               ) : (
@@ -848,7 +848,7 @@ const handleDownloadQr = async (batch) => {
 <div className="bg-white p-5 rounded-2xl shadow-xs border">
   <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
     <h2 className="font-bold text-sm flex items-center gap-2">
-      <PackageCheck className="w-5 h-5 text-emerald-700" /> Đơn Hàng & Chi Tiết Phân Bổ Lô Xuất Kho FEFO (UC-01 & UC-02)
+      <PackageCheck className="w-5 h-5 text-emerald-700" /> Đơn Hàng & Chi Tiết Phân Bổ Lô Xuất Kho FEFO 
     </h2>
     <div className="flex flex-wrap gap-1.5 text-xs">
       {[
@@ -1043,7 +1043,6 @@ const handleDownloadQr = async (batch) => {
           
         )}
 
-        
       </main>
 
     </div>
