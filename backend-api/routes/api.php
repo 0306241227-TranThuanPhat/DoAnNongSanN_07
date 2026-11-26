@@ -863,3 +863,92 @@ Route::delete('/admin/products/{id}', function ($id) {
         'message' => 'Đã xóa vĩnh viễn sản phẩm khỏi danh mục!',
     ]);
 });
+// =========================================================================
+// 21. API PHỤC VỤ UX & TÍCH HỢP HỆ THỐNG TUẦN 06
+// =========================================================================
+
+// 21.1 Kiểm tra tồn kho lô khả dụng theo thời gian thực cho Giỏ hàng (AJAX)
+Route::post('/cart/check-stock', function (\Illuminate\Http\Request $request) {
+    $productId = $request->input('product_id');
+    $quantity  = (int) $request->input('quantity', 1);
+
+    $available = \Illuminate\Support\Facades\DB::table('batches')
+        ->where('product_id', $productId)
+        ->where('so_luong_ton', '>', 0)
+        ->whereDate('ngay_het_han', '>=', now()->toDateString())
+        ->sum('so_luong_ton');
+
+    if ($available < $quantity) {
+        return response()->json([
+            'status'    => 'error',
+            'message'   => "Kho chỉ còn {$available} đơn vị khả dụng (chưa hết hạn)!",
+            'available' => $available,
+        ], 422);
+    }
+
+    return response()->json([
+        'status'    => 'success',
+        'message'   => 'Tồn kho hợp lệ!',
+        'available' => $available,
+    ]);
+});
+
+// 21.2 Tính phí vận chuyển động theo khoảng cách từ Nông trại Đà Lạt (5.000đ/km)
+Route::post('/shipping/calculate', function (\Illuminate\Http\Request $request) {
+    $diaChi = mb_strtolower(trim($request->input('dia_chi', '')), 'UTF-8');
+
+    if ($diaChi === '') {
+        return response()->json([
+            'distance_km'  => 0,
+            'rate_per_km'  => 5000,
+            'shipping_fee' => 0,
+            'formula'      => 'Nhập địa chỉ để tính khoảng cách',
+        ]);
+    }
+
+    // Khoảng cách quy đổi từ tọa độ Nông trại Single Farm (Đà Lạt, Lâm Đồng)
+    $km = 12; // Mặc định nội vùng kho trung chuyển
+    if (str_contains($diaChi, 'đà lạt') || str_contains($diaChi, 'lâm đồng')) {
+        $km = 6;
+    } elseif (str_contains($diaChi, 'bảo lộc')) {
+        $km = 110;
+    } elseif (str_contains($diaChi, 'nha trang') || str_contains($diaChi, 'khánh hòa')) {
+        $km = 135;
+    } elseif (str_contains($diaChi, 'biên hòa') || str_contains($diaChi, 'đồng nai')) {
+        $km = 275;
+    } elseif (str_contains($diaChi, 'bình dương') || str_contains($diaChi, 'thủ dầu một')) {
+        $km = 290;
+    } elseif (str_contains($diaChi, 'quận 1') || str_contains($diaChi, 'quận 3') || str_contains($diaChi, 'bình thạnh')) {
+        $km = 8;
+    } elseif (str_contains($diaChi, 'thủ đức') || str_contains($diaChi, 'quận 7') || str_contains($diaChi, 'tân bình')) {
+        $km = 14;
+    }
+
+    $donGiaKm = 5000;
+    $phiShip  = $km * $donGiaKm;
+
+    return response()->json([
+        'distance_km'  => $km,
+        'rate_per_km'  => $donGiaKm,
+        'shipping_fee' => $phiShip,
+        'formula'      => "{$km} km × 5.000đ/km",
+    ]);
+});
+
+// 21.3 Upload hình ảnh minh chứng khiếu nại (.jpg, .png < 5MB)
+Route::post('/complaints/upload-evidence', function (\Illuminate\Http\Request $request) {
+    $request->validate([
+        'image' => 'required|file|mimes:jpg,jpeg,png|max:5120',
+    ], [
+        'image.required' => 'Vui lòng chọn hình ảnh minh chứng!',
+        'image.mimes'    => 'Chỉ chấp nhận định dạng ảnh .JPG hoặc .PNG!',
+        'image.max'      => 'Dung lượng ảnh vượt quá giới hạn 5MB!',
+    ]);
+
+    $path = $request->file('image')->store('complaint-evidences', 'public');
+
+    return response()->json([
+        'status'   => 'success',
+        'file_url' => asset('storage/' . $path),
+    ]);
+});

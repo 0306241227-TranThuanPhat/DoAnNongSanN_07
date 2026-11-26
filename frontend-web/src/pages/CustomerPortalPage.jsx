@@ -1,7 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import axios from 'axios';
-import { ArrowLeft, Package, CalendarClock, AlertCircle, CheckCircle2, Sparkles } from 'lucide-react';
+import {
+  ArrowLeft, Package, CalendarClock, AlertCircle,
+  CheckCircle2, Sparkles, Upload, Loader2
+} from 'lucide-react';
+import apiClient from '../utils/apiClient';
+import { showToast } from '../components/GlobalUxOverlay';
 
 export default function CustomerPortalPage() {
   const navigate = useNavigate();
@@ -10,13 +14,16 @@ export default function CustomerPortalPage() {
   const [myData, setMyData] = useState({ orders: [], subscriptions: [] });
   const [plans, setPlans] = useState([]);
 
-  // Modal khiếu nại 24h (UC-03)
+  // Modal khiếu nại 24h (UC-03) & State Upload ảnh minh chứng
   const [complaintOrder, setComplaintOrder] = useState(null);
   const [complaintForm, setComplaintForm] = useState({
     ly_do: 'Rau củ bị dập nát khi vận chuyển',
     mo_ta: '',
-    file_url: 'https://images.unsplash.com/photo-1592924357228-91a4daadcfea?w=600',
+    file_url: '',
   });
+  const [evidenceFile, setEvidenceFile] = useState(null);
+  const [evidencePreview, setEvidencePreview] = useState('');
+  const [isUploadingEvidence, setIsUploadingEvidence] = useState(false);
 
   // Form đăng ký gói định kỳ (UC-02)
   const [selectedPlan, setSelectedPlan] = useState(null);
@@ -31,8 +38,8 @@ export default function CustomerPortalPage() {
 
   const loadData = () => {
     if (!user) return;
-    axios.get(`http://127.0.0.1:8000/api/my-orders/${user.id}`).then(res => setMyData(res.data));
-    axios.get('http://127.0.0.1:8000/api/subscription-plans').then(res => {
+    apiClient.get(`/my-orders/${user.id}`).then(res => setMyData(res.data));
+    apiClient.get('/subscription-plans').then(res => {
       setPlans(res.data);
       if (res.data.length > 0 && !selectedPlan) setSelectedPlan(res.data[0]);
     });
@@ -47,23 +54,76 @@ export default function CustomerPortalPage() {
   }, []);
 
   const handleMarkDelivered = async (orderId) => {
-    const res = await axios.post(`http://127.0.0.1:8000/api/orders/${orderId}/mark-delivered`);
-    alert(res.data.message);
-    loadData();
+    try {
+      const res = await apiClient.post(`/orders/${orderId}/mark-delivered`);
+      showToast(res.data.message || 'Đã xác nhận nhận hàng!');
+      loadData();
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Lỗi xác nhận đơn hàng!', 'error');
+    }
   };
 
-  const handleSendComplaint = async (e) => {
+  // Validate định dạng (.jpg, .png) & dung lượng (< 5MB) ngay ở Frontend
+  const handleSelectEvidence = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const validTypes = ['image/jpeg', 'image/png'];
+    if (!validTypes.includes(file.type)) {
+      showToast('Sai định dạng! Chỉ chấp nhận ảnh .JPG hoặc .PNG.', 'error');
+      e.target.value = '';
+      setEvidenceFile(null);
+      setEvidencePreview('');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      showToast('Dung lượng ảnh vượt quá 5MB! Vui lòng chọn ảnh nhẹ hơn.', 'error');
+      e.target.value = '';
+      setEvidenceFile(null);
+      setEvidencePreview('');
+      return;
+    }
+
+    setEvidenceFile(file);
+    setEvidencePreview(URL.createObjectURL(file));
+    showToast(`Đã chọn ảnh hợp lệ: ${file.name}`);
+  };
+
+  const handleSubmitComplaint = async (e) => {
     e.preventDefault();
+    if (!evidenceFile) {
+      showToast('Vui lòng tải lên hình ảnh minh chứng (.jpg hoặc .png)!', 'error');
+      return;
+    }
+
     try {
-      const res = await axios.post('http://127.0.0.1:8000/api/complaints', {
-        order_id: complaintOrder.id,
-        ...complaintForm,
+      setIsUploadingEvidence(true);
+
+      // Bước 1: Upload file thật lên Server để lấy URL
+      const formData = new FormData();
+      formData.append('image', evidenceFile);
+      const uploadRes = await apiClient.post('/complaints/upload-evidence', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
       });
-      alert(res.data.message);
+
+      // Bước 2: Gửi yêu cầu khiếu nại kèm link ảnh vừa upload
+      await apiClient.post('/complaints', {
+        order_id: complaintOrder.id,
+        ly_do: complaintForm.ly_do,
+        mo_ta: complaintForm.mo_ta,
+        file_url: uploadRes.data.file_url,
+      });
+
+      showToast('Đã gửi yêu cầu khiếu nại kèm ảnh minh chứng thành công!');
+      setEvidenceFile(null);
+      setEvidencePreview('');
       setComplaintOrder(null);
       loadData();
     } catch (err) {
-      alert(err.response?.data?.message || 'Không thể gửi khiếu nại!');
+      showToast(err.response?.data?.message || 'Lỗi khi gửi khiếu nại!', 'error');
+    } finally {
+      setIsUploadingEvidence(false);
     }
   };
 
@@ -78,16 +138,16 @@ export default function CustomerPortalPage() {
   const handleSubscribe = async (e) => {
     e.preventDefault();
     try {
-      const res = await axios.post('http://127.0.0.1:8000/api/subscriptions', {
+      const res = await apiClient.post('/subscriptions', {
         user_id: user.id,
         plan_id: selectedPlan.id,
         ...subForm,
       });
-      alert(res.data.message);
+      showToast(res.data.message || 'Đăng ký gói định kỳ thành công!');
       loadData();
       setTab('orders');
     } catch (err) {
-      alert(err.response?.data?.message || 'Đăng ký gói thất bại!');
+      showToast(err.response?.data?.message || 'Đăng ký gói thất bại!', 'error');
     }
   };
 
@@ -120,7 +180,7 @@ export default function CustomerPortalPage() {
                 tab === 'subscriptions' ? 'bg-amber-400 text-emerald-950' : 'bg-emerald-800 text-white'
               }`}
             >
-              <CalendarClock className="w-4 h-4" /> Gói Rau Định Kỳ 
+              <CalendarClock className="w-4 h-4" /> Gói Rau Định Kỳ
             </button>
           </div>
         </div>
@@ -180,7 +240,11 @@ export default function CustomerPortalPage() {
 
                     {order.trang_thai === 'Đã giao' && !order.khieu_nai && (
                       <button
-                        onClick={() => setComplaintOrder(order)}
+                        onClick={() => {
+                          setComplaintOrder(order);
+                          setEvidenceFile(null);
+                          setEvidencePreview('');
+                        }}
                         className="px-3.5 py-1.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-xs font-bold flex items-center gap-1"
                       >
                         <AlertCircle className="w-3.5 h-3.5" /> Khiếu nại / Đổi trả (Trong 24h)
@@ -302,7 +366,7 @@ export default function CustomerPortalPage() {
       {/* Modal Gửi Khiếu Nại 24h (UC-03) */}
       {complaintOrder && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-          <form onSubmit={handleSendComplaint} className="bg-white max-w-md w-full rounded-2xl p-6 space-y-4">
+          <form onSubmit={handleSubmitComplaint} className="bg-white max-w-md w-full rounded-2xl p-6 space-y-4">
             <h3 className="font-extrabold text-base text-red-700">
               Khiếu Nại Đơn Hàng {complaintOrder.ma_don_hang}
             </h3>
@@ -329,21 +393,55 @@ export default function CustomerPortalPage() {
                 className="w-full p-2.5 border rounded-xl text-xs"
               />
             </div>
-            <div>
-              <label className="block text-xs font-bold mb-1">Đường dẫn ảnh/video minh chứng (Bắt buộc)</label>
-              <input
-                required
-                value={complaintForm.file_url}
-                onChange={e => setComplaintForm({ ...complaintForm, file_url: e.target.value })}
-                className="w-full p-2.5 border rounded-xl text-xs"
-              />
+
+            <div className="space-y-1.5">
+              <label className="block text-xs font-bold mb-1">
+                Hình ảnh minh chứng (Bắt buộc • .JPG, .PNG &lt; 5MB)
+              </label>
+
+              <label className="flex flex-col items-center justify-center gap-1 p-3.5 border-2 border-dashed border-stone-300 hover:border-emerald-600 rounded-xl cursor-pointer bg-stone-50 transition text-center">
+                <Upload className="w-5 h-5 text-emerald-700" />
+                <span className="text-xs font-semibold text-stone-700">
+                  {evidenceFile ? evidenceFile.name : 'Bấm để chọn ảnh từ máy tính'}
+                </span>
+                <span className="text-[11px] text-stone-400">Chỉ nhận .jpg, .png • Tối đa 5MB</span>
+                <input
+                  type="file"
+                  accept=".jpg,.jpeg,.png"
+                  onChange={handleSelectEvidence}
+                  className="hidden"
+                />
+              </label>
+
+              {evidencePreview && (
+                <img
+                  src={evidencePreview}
+                  alt="Xem trước minh chứng"
+                  className="w-full h-28 object-cover rounded-xl border border-stone-200 mt-1.5"
+                />
+              )}
             </div>
+
             <div className="flex gap-2 pt-2">
-              <button type="button" onClick={() => setComplaintOrder(null)} className="flex-1 py-2.5 border rounded-xl text-xs font-bold">
+              <button
+                type="button"
+                onClick={() => setComplaintOrder(null)}
+                className="flex-1 py-2.5 border rounded-xl text-xs font-bold"
+              >
                 Hủy
               </button>
-              <button type="submit" className="flex-1 py-2.5 bg-red-600 text-white rounded-xl text-xs font-bold">
-                Gửi yêu cầu khiếu nại
+              <button
+                type="submit"
+                disabled={isUploadingEvidence}
+                className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 disabled:bg-stone-300 text-white rounded-xl text-xs font-bold inline-flex items-center justify-center gap-1.5"
+              >
+                {isUploadingEvidence ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" /> Đang tải ảnh...
+                  </>
+                ) : (
+                  'Gửi yêu cầu khiếu nại'
+                )}
               </button>
             </div>
           </form>

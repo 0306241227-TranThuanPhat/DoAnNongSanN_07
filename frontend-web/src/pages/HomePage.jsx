@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import axios from 'axios';
 import {
   ShoppingBag, Search, QrCode, ShieldCheck, Plus, Minus, X,
-  CheckCircle2, User, LayoutDashboard, LogOut, Copy, Sparkles
+  CheckCircle2, User, LayoutDashboard, LogOut, Copy, Sparkles, Loader2
 } from 'lucide-react';
 import PaymentGatewayModal from '../components/PaymentGatewayModal';
+import apiClient from '../utils/apiClient';
+import { showToast } from '../components/GlobalUxOverlay';
+
 export default function HomePage() {
   const [products, setProducts] = useState([]);
   const [search, setSearch] = useState('');
@@ -14,6 +16,13 @@ export default function HomePage() {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [copiedCode, setCopiedCode] = useState('');
   const [user, setUser] = useState(() => JSON.parse(localStorage.getItem('user') || 'null'));
+
+  // State UX Tuần 06: Spinner kiểm kho, Tính phí ship động & Phương thức thanh toán
+  const [loadingProductId, setLoadingProductId] = useState(null);
+  const [shippingFee, setShippingFee] = useState(0);
+  const [shippingFormula, setShippingFormula] = useState('Nhập địa chỉ để tính phí (5.000đ/km)');
+  const [isCalculatingShip, setIsCalculatingShip] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState('VNPAY');
 
   // Form đặt hàng trong giỏ hàng
   const [checkoutForm, setCheckoutForm] = useState({
@@ -24,28 +33,35 @@ export default function HomePage() {
   const [orderMessage, setOrderMessage] = useState('');
   const [paymentSession, setPaymentSession] = useState(null);
   const [selectedProduct, setSelectedProduct] = useState(null);
-const [detailQty, setDetailQty] = useState(1);
-const [purchaseMode, setPurchaseMode] = useState('once');
+  const [detailQty, setDetailQty] = useState(1);
+  const [purchaseMode, setPurchaseMode] = useState('once');
 
-const handleAddFromDetail = (product, qty) => {
-  setCart((prev) => {
-    const exists = prev.find((i) => i.id === product.id);
-    if (exists) {
-      return prev.map((i) =>
-        i.id === product.id
-          ? { ...i, quantity: Math.min(product.ton_kho_kha_dung, i.quantity + qty) }
-          : i
-      );
-    }
-    return [...prev, { ...product, quantity: qty }];
-  });
-  setSelectedProduct(null);
-};
+  // Tự động gọi API tính phí vận chuyển theo khoảng cách khi nhập địa chỉ giao hàng
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      const addr = checkoutForm.dia_chi_giao?.trim();
+      if (!addr) {
+        setShippingFee(0);
+        setShippingFormula('Nhập địa chỉ để tính phí (5.000đ/km)');
+        return;
+      }
+      try {
+        setIsCalculatingShip(true);
+        const res = await apiClient.post('/shipping/calculate', { dia_chi: addr });
+        setShippingFee(res.data.shipping_fee);
+        setShippingFormula(res.data.formula);
+      } catch (err) {
+        console.error('Lỗi tính phí ship:', err);
+      } finally {
+        setIsCalculatingShip(false);
+      }
+    }, 400);
 
-
+    return () => clearTimeout(timer);
+  }, [checkoutForm.dia_chi_giao]);
 
   const fetchProducts = () => {
-    axios.get('http://127.0.0.1:8000/api/products')
+    apiClient.get('/products')
       .then(res => setProducts(res.data))
       .catch(err => console.error('Lỗi tải sản phẩm:', err));
   };
@@ -56,71 +72,124 @@ const handleAddFromDetail = (product, qty) => {
 
   const handleLogout = () => {
     localStorage.removeItem('user');
+    localStorage.removeItem('auth_token');
     setUser(null);
+    showToast('Đã đăng xuất khỏi hệ thống!');
   };
 
   const handleCopy = (code) => {
     navigator.clipboard.writeText(code);
     setCopiedCode(code);
+    showToast(`Đã sao chép mã ưu đãi ${code}`);
     setTimeout(() => setCopiedCode(''), 2000);
   };
 
-  const addToCart = (product) => {
-    setCart(prev => {
-      const exist = prev.find(i => i.id === product.id);
-      if (exist) {
-        return prev.map(i => i.id === product.id ? { ...i, quantity: i.quantity + 1 } : i);
-      }
-      return [...prev, { ...product, quantity: 1 }];
-    });
-    setIsCartOpen(true);
+  // Thêm vào giỏ hàng kèm kiểm tra tồn kho AJAX + Loading Spinner + Toast
+  const addToCart = async (product, qtyToAdd = 1) => {
+    const exist = cart.find(i => i.id === product.id);
+    const nextQty = (exist ? exist.quantity : 0) + qtyToAdd;
+
+    try {
+      setLoadingProductId(product.id);
+      await apiClient.post('/cart/check-stock', {
+        product_id: product.id,
+        quantity: nextQty,
+      });
+
+      setCart(prev => {
+        if (exist) {
+          return prev.map(i => i.id === product.id ? { ...i, quantity: nextQty } : i);
+        }
+        return [...prev, { ...product, quantity: qtyToAdd }];
+      });
+      showToast(`Đã thêm "${product.ten_san_pham}" vào giỏ hàng!`);
+      setIsCartOpen(true);
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Không đủ tồn kho khả dụng!', 'error');
+    } finally {
+      setLoadingProductId(null);
+    }
   };
 
-  const updateQty = (id, delta) => {
-    setCart(prev => prev
-      .map(i => i.id === id ? { ...i, quantity: Math.max(0, i.quantity + delta) } : i)
-      .filter(i => i.quantity > 0)
-    );
+  const handleAddFromDetail = async (product, qty) => {
+    await addToCart(product, qty);
+    setSelectedProduct(null);
+  };
+
+  const updateQty = async (id, delta) => {
+    const target = cart.find(i => i.id === id);
+    if (!target) return;
+    const nextQty = target.quantity + delta;
+
+    if (nextQty <= 0) {
+      setCart(prev => prev.filter(i => i.id !== id));
+      return;
+    }
+
+    if (delta > 0) {
+      try {
+        setLoadingProductId(id);
+        await apiClient.post('/cart/check-stock', {
+          product_id: id,
+          quantity: nextQty,
+        });
+      } catch (err) {
+        showToast(err.response?.data?.message || 'Đã đạt giới hạn tồn kho lô!', 'error');
+        return;
+      } finally {
+        setLoadingProductId(null);
+      }
+    }
+
+    setCart(prev => prev.map(i => i.id === id ? { ...i, quantity: nextQty } : i));
   };
 
   const subTotal = cart.reduce((sum, i) => sum + Number(i.gia_hien_tai) * i.quantity, 0);
-  const shipFee = subTotal >= 500000 || subTotal === 0 ? 0 : 25000;
-  const totalAmount = subTotal + shipFee;
+  const finalShipFee = subTotal >= 500000 || subTotal === 0 ? 0 : shippingFee;
+  const totalAmount = subTotal + finalShipFee;
 
- const handleCheckout = (e) => {
-  e.preventDefault();
-  if (cart.length === 0) return;
+  const handleCheckout = (e) => {
+    e.preventDefault();
+    if (cart.length === 0) return;
 
-  setPaymentSession({
-    type: 'ORDER',
-    amount: totalAmount,
-    description: `Thanh toán đơn hàng Single Farm (${cart.length} sản phẩm)`,
-  });
-};
+    if (paymentMethod === 'COD') {
+      handlePaymentSuccess({
+        phuong_thuc: 'COD',
+        ma_giao_dich_cong: `COD-${Date.now()}`,
+      });
+      return;
+    }
 
-const handlePaymentSuccess = async ({ phuong_thuc, ma_giao_dich_cong }) => {
-  try {
-    const res = await axios.post('http://127.0.0.1:8000/api/orders/checkout', {
-      user_id: user?.id || null,
-      ten_nguoi_nhan: checkoutForm.ten_nguoi_nhan,
-      so_dien_thoai_nhan: checkoutForm.so_dien_thoai_nhan,
-      dia_chi_giao: checkoutForm.dia_chi_giao,
-      tong_tien_hang: subTotal,
-      phi_van_chuyen: shipFee,
-      tong_thanh_toan: totalAmount,
-      phuong_thuc,
-      ma_giao_dich_cong,
-      items: cart,
+    setPaymentSession({
+      type: 'ORDER',
+      amount: totalAmount,
+      description: `Thanh toán đơn hàng Single Farm (${cart.length} sản phẩm)`,
     });
-    setPaymentSession(null);
-    setOrderMessage(`${res.data.message} (Mã GD ${phuong_thuc}: ${ma_giao_dich_cong})`);
-    setCart([]);
-    fetchProducts();
-  } catch (err) {
-    alert(err.response?.data?.message || 'Có lỗi khi đặt hàng!');
-  }
-};
+  };
 
+  const handlePaymentSuccess = async ({ phuong_thuc, ma_giao_dich_cong }) => {
+    try {
+      const res = await apiClient.post('/orders/checkout', {
+        user_id: user?.id || null,
+        ten_nguoi_nhan: checkoutForm.ten_nguoi_nhan,
+        so_dien_thoai_nhan: checkoutForm.so_dien_thoai_nhan,
+        dia_chi_giao: checkoutForm.dia_chi_giao,
+        tong_tien_hang: subTotal,
+        phi_van_chuyen: finalShipFee,
+        tong_thanh_toan: totalAmount,
+        phuong_thuc,
+        ma_giao_dich_cong,
+        items: cart,
+      });
+      setPaymentSession(null);
+      setOrderMessage(`${res.data.message} (Mã GD ${phuong_thuc}: ${ma_giao_dich_cong})`);
+      showToast('Đặt hàng & trừ kho FEFO thành công!');
+      setCart([]);
+      fetchProducts();
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Có lỗi khi đặt hàng!', 'error');
+    }
+  };
   const filteredProducts = products.filter(p => {
     const matchName = p.ten_san_pham.toLowerCase().includes(search.toLowerCase());
     const matchCert = certFilter === 'ALL' || (p.chung_nhan && p.chung_nhan.includes(certFilter));
@@ -311,12 +380,20 @@ const handlePaymentSuccess = async ({ phuong_thuc, ma_giao_dich_cong }) => {
                     </div>
 
                     <button
-                      disabled={Number(p.ton_kho_kha_dung) <= 0}
-                      onClick={() => addToCart(p)}
-                      className="bg-emerald-700 hover:bg-emerald-800 disabled:bg-stone-300 text-white px-4 py-2 rounded-xl text-xs font-bold transition"
-                    >
-                      {Number(p.ton_kho_kha_dung) > 0 ? '+ Thêm giỏ' : 'Hết hàng'}
-                    </button>
+  disabled={Number(p.ton_kho_kha_dung) <= 0 || loadingProductId === p.id}
+  onClick={() => addToCart(p)}
+  className="bg-emerald-700 hover:bg-emerald-800 disabled:bg-stone-300 text-white px-4 py-2 rounded-xl text-xs font-bold transition inline-flex items-center gap-1.5"
+>
+  {loadingProductId === p.id ? (
+    <>
+      <Loader2 className="w-3.5 h-3.5 animate-spin" /> Đang kiểm...
+    </>
+  ) : Number(p.ton_kho_kha_dung) > 0 ? (
+    '+ Thêm giỏ'
+  ) : (
+    'Hết hàng'
+  )}
+</button>
                   </div>
                 </div>
               </div>
@@ -406,13 +483,58 @@ const handlePaymentSuccess = async ({ phuong_thuc, ma_giao_dich_cong }) => {
                         className="w-full px-3 py-2 border rounded-xl text-sm"
                       />
 
-                      <div className="bg-stone-50 p-3 rounded-xl space-y-1 text-xs">
-                        <div className="flex justify-between"><span>Tạm tính:</span><span>{subTotal.toLocaleString('vi-VN')}đ</span></div>
-                        <div className="flex justify-between"><span>Phí ship hỏa tốc:</span><span>{shipFee === 0 ? 'Miễn phí' : `${shipFee.toLocaleString('vi-VN')}đ`}</span></div>
-                        <div className="flex justify-between font-extrabold text-sm text-emerald-800 pt-1 border-t">
-                          <span>Tổng thanh toán:</span><span>{totalAmount.toLocaleString('vi-VN')}đ</span>
-                        </div>
-                      </div>
+                      {/* Chọn phương thức thanh toán */}
+<div className="space-y-1.5">
+  <div className="text-[11px] font-bold uppercase text-stone-500">Phương thức thanh toán</div>
+  <div className="grid grid-cols-2 gap-2">
+    <button
+      type="button"
+      onClick={() => setPaymentMethod('VNPAY')}
+      className={`py-2 px-3 rounded-xl border text-xs font-bold transition ${
+        paymentMethod === 'VNPAY'
+          ? 'border-emerald-600 bg-emerald-50 text-emerald-800'
+          : 'border-stone-200 text-stone-600'
+      }`}
+    >
+      💳 VNPay / Online
+    </button>
+    <button
+      type="button"
+      onClick={() => setPaymentMethod('COD')}
+      className={`py-2 px-3 rounded-xl border text-xs font-bold transition ${
+        paymentMethod === 'COD'
+          ? 'border-emerald-600 bg-emerald-50 text-emerald-800'
+          : 'border-stone-200 text-stone-600'
+      }`}
+    >
+      💵 Tiền mặt (COD)
+    </button>
+  </div>
+</div>
+
+{/* Tổng tiền & Phí vận chuyển động theo km */}
+<div className="bg-stone-50 p-3 rounded-xl space-y-1.5 text-xs">
+  <div className="flex justify-between">
+    <span>Tạm tính:</span>
+    <span className="font-semibold">{subTotal.toLocaleString('vi-VN')}đ</span>
+  </div>
+  <div className="flex justify-between items-center gap-2">
+    <span>
+      Phí ship{' '}
+      <span className="text-[11px] text-emerald-700 font-semibold">
+        ({isCalculatingShip ? 'Đang tính km...' : shippingFormula})
+      </span>
+      :
+    </span>
+    <span className="font-semibold shrink-0">
+      {subTotal >= 500000 ? 'Miễn phí' : `${finalShipFee.toLocaleString('vi-VN')}đ`}
+    </span>
+  </div>
+  <div className="flex justify-between font-extrabold text-sm text-emerald-800 pt-1.5 border-t">
+    <span>Tổng thanh toán:</span>
+    <span>{totalAmount.toLocaleString('vi-VN')}đ</span>
+  </div>
+</div>
 
                       <button type="submit" className="w-full bg-emerald-700 hover:bg-emerald-800 text-white py-3 rounded-xl font-bold text-sm">
                         Xác nhận đặt hàng (Tự động trừ kho FEFO)
