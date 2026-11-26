@@ -842,3 +842,24 @@ Route::patch('/admin/products/{id}/toggle-status', function ($id) {
 
     return response()->json(['message' => "Đã chuyển sản phẩm sang trạng thái: {$newStatus}"]);
 });
+// 20. BỔ SUNG TUẦN 5: API QR SERVICE & HÀNH VI DELETE CHUẨN RESTFUL
+Route::get('/farm/batches/{id}/qr', function ($id, \App\Services\QrGeneratorService $qrService) {
+    return response()->json([
+        'status' => 'success',
+        'data'   => $qrService->generateForBatch((int) $id),
+    ]);
+});
+
+Route::delete('/admin/products/{id}', function ($id) {
+    $hasBatches = DB::table('batches')->where('product_id', $id)->exists();
+    if ($hasBatches) {
+        throw new \Exception('Không thể xóa vĩnh viễn sản phẩm đã phát sinh lô thu hoạch! Hãy dùng chức năng Ngừng bán.');
+    }
+    DB::table('product_certifications')->where('product_id', $id)->delete();
+    DB::table('products')->where('id', $id)->delete();
+
+    return response()->json([
+        'status'  => 'success',
+        'message' => 'Đã xóa vĩnh viễn sản phẩm khỏi danh mục!',
+    ]);
+});

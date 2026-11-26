@@ -1,0 +1,84 @@
+{
+  "info": {
+    "name": "Single Farm - API & FEFO Test (Tuần 05)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. [GET] Danh sách sản phẩm & tồn kho FEFO",
+      "request": {
+        "method": "GET",
+        "url": "http://127.0.0.1:8000/api/products"
+      }
+    },
+    {
+      "name": "2. [POST] Tạo lô thu hoạch mới (Farm Staff)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"product_id\": 1,\n  \"ngay_gieo_hat\": \"2026-10-20\",\n  \"ngay_thu_hoach\": \"2026-11-25\",\n  \"ngay_het_han\": \"2026-11-30\",\n  \"so_luong_nhap\": 25\n}"
+        },
+        "url": "http://127.0.0.1:8000/api/farm/batches"
+      }
+    },
+    {
+      "name": "3. [GET] Sinh mã QR truy xuất nguồn gốc theo ID lô",
+      "request": {
+        "method": "GET",
+        "url": "http://127.0.0.1:8000/api/farm/batches/1/qr"
+      }
+    },
+    {
+      "name": "4. [POST] Đặt hàng trừ kho FEFO (Thành công)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"ten_nguoi_nhan\": \"Nguyễn Văn Test\",\n  \"so_dien_thoai_nhan\": \"0909123456\",\n  \"dia_chi_giao\": \"Quận 1, TP.HCM\",\n  \"tong_tien_hang\": 70000,\n  \"phi_van_chuyen\": 20000,\n  \"tong_thanh_toan\": 90000,\n  \"items\": [\n    { \"id\": 1, \"ten_san_pham\": \"Cải Bó Xôi Hữu Cơ Đà Lạt\", \"quantity\": 2, \"gia_hien_tai\": 35000 }\n  ]\n}"
+        },
+        "url": "http://127.0.0.1:8000/api/orders/checkout"
+      }
+    },
+    {
+      "name": "5. [POST] Đặt hàng vượt tồn kho (Test Exception FEFO)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"ten_nguoi_nhan\": \"Nguyễn Văn Test\",\n  \"items\": [\n    { \"id\": 1, \"ten_san_pham\": \"Cải Bó Xôi Hữu Cơ Đà Lạt\", \"quantity\": 9999, \"gia_hien_tai\": 35000 }\n  ]\n}"
+        },
+        "url": "http://127.0.0.1:8000/api/orders/checkout"
+      }
+    },
+    {
+      "name": "6. [PUT] Cập nhật thông tin sản phẩm",
+      "request": {
+        "method": "PUT",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"ma_sku\": \"RAU-001\",\n  \"ten_san_pham\": \"Cải Bó Xôi Hữu Cơ Đà Lạt\",\n  \"don_vi_tinh\": \"500g\",\n  \"gia_ban_co_ban\": 36000,\n  \"chung_nhan\": \"VietGAP\"\n}"
+        },
+        "url": "http://127.0.0.1:8000/api/admin/products/1"
+      }
+    },
+    {
+      "name": "7. [PATCH] Đổi trạng thái Đang bán / Ngừng bán",
+      "request": {
+        "method": "PATCH",
+        "url": "http://127.0.0.1:8000/api/admin/products/1/toggle-status"
+      }
+    },
+    {
+      "name": "8. [DELETE] Xóa sản phẩm chưa phát sinh lô",
+      "request": {
+        "method": "DELETE",
+        "url": "http://127.0.0.1:8000/api/admin/products/999"
+      }
+    }
+  ]
+}
