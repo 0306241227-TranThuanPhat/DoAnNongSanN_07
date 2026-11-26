@@ -16,12 +16,11 @@ Hệ thống web quản lý vận hành chuỗi cung ứng nông sản khép kí
 ## Tính Năng Nổi Bật Theo Phân Hệ
 
 ### 1. Khách Hàng (Customer — UC-01, UC-02, UC-03)
-* **Gian hàng & Chi tiết nông sản:** Hiển thị giá bán thực tế (tự động cập nhật giá Flash Sale nếu có lô cận hạn), tổng tồn kho khả dụng còn hạn sử dụng, chứng nhận chất lượng (VietGAP, USDA Organic...) và thông tin lô ưu tiên xuất kho.
-* **Mua lẻ & Gói định kỳ 30 ngày:**
-  * Hỗ trợ đặt đơn lẻ và tự động phân bổ lô hàng theo nguyên tắc **FEFO** (`ngay_het_han` gần nhất xuất trước).
-  * Đăng ký gói rau củ định kỳ 1 tháng theo các thứ tùy chọn trong tuần; hệ thống tự động sinh lịch giao (`delivery_schedules`) và các đơn hàng con tương ứng.
-* **Thanh toán Sandbox:** Tích hợp cổng thanh toán giả lập **VNPay** và **MoMo**, tự động ghi nhận lịch sử giao dịch vào bảng `payments`.
-* **Cổng Khách Hàng & Khiếu nại 24h:** Theo dõi trạng thái đơn hàng, xác nhận nhận hàng và gửi yêu cầu khiếu nại kèm hình ảnh minh chứng trong vòng **24 giờ** kể từ lúc giao.
+* ****Mua sắm & Giỏ hàng thông minh:** Xem danh sách nông sản sạch, kiểm tra tồn kho khả dụng theo thời gian thực, hiệu ứng Loading Spinner và Toast thông báo tức thì.
+- **Tính phí vận chuyển động:** Tự động tính cước giao hàng dựa trên địa chỉ/quận huyện giao nhận (`km × 5.000đ`).
+- **Thanh toán đa phương thức:** Hỗ trợ thanh toán COD và mô phỏng cổng thanh toán trực tuyến (VNPay / Online), tự động trừ tồn kho thực tế theo lô FEFO ngay khi xác nhận đơn.
+- **Gói rau củ định kỳ (Subscription):** Đăng ký gói rau theo tuần (tự động sinh lịch giao 30 ngày và chốt kho trước giờ giao).
+- **Khiếu nại & Đổi trả trong 24h:** Tải lên hình ảnh minh chứng thực tế (`.jpg`, `.png`, giới hạn `< 5MB`) có xem trước ảnh và kiểm tra định dạng/dung lượng ngay trên trình duyệt.
 
 ### 2. Nhân Viên Nông Trại (Farm Staff — UC-04, UC-05)
 * **Quản lý danh mục & sản phẩm:** Thêm mới nông sản, chỉnh sửa thông tin/giá bán và chuyển trạng thái **Đang bán / Ngừng bán** (ẩn khỏi gian hàng mà vẫn bảo toàn toàn vẹn dữ liệu lịch sử lô và đơn hàng).
@@ -47,17 +46,21 @@ Hệ thống web quản lý vận hành chuỗi cung ứng nông sản khép kí
 
 ```text
 DoAnNongSanN_07/
-├── backend-api/                # Mã nguồn Laravel 11 API
-│   ├── app/Console/Commands/   # Lệnh chạy Scheduler tự động (farm:daily-tasks)
-│   ├── database/               # Migrations, Seeders & database.sqlite
-│   ├── routes/api.php          # Định nghĩa toàn bộ RESTful API
-│   └── storage/app/public/     # Lưu trữ tệp giấy kiểm định chất lượng
-└── frontend-web/               # Mã nguồn React + Vite
+├── backend-api/                 # Laravel 11 REST API
+│   ├── app/Http/Controllers/    # Xử lý Đơn hàng, Khiếu nại, Upload ảnh, Tính phí ship
+│   ├── app/Services/            # FefoService.php (Thuật toán xuất kho FEFO), QrGeneratorService.php
+│   ├── database/seeders/        # Dữ liệu mẫu sản phẩm, lô hàng, gói định kỳ
+│   └── routes/api.php           # Định nghĩa các endpoint API
+└── frontend-web/                # React + Vite SPA
     └── src/
-        ├── components/         # Modal chi tiết sản phẩm, cổng thanh toán...
-        └── pages/              # Trang chủ, Dashboard vận hành, Cổng khách hàng, Trang quét QR
+        ├── components/          # GlobalUxOverlay.jsx (Toast & Popup 419), PaymentGatewayModal.jsx
+        ├── pages/               # HomePage, CustomerPortalPage, DashboardPage, TracePage
+        └── utils/apiClient.js   # Cấu hình Axios & Interceptor bắt lỗi 401/419
 
 Hướng Dẫn Cài Đặt & Chạy Dự Án
+Clone mã nguồn
+git clone [https://github.com/](https://github.com/)<tai-khoan-cua-ban>/DoAnNongSanN_07.git
+cd DoAnNongSanN_07
 ở thư mục backend
 cd thư mục dự án 
 cd backend-api
