@@ -17,7 +17,7 @@ export default function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/my-account" element={<CustomerPortalPage />} />
         <Route path="/dashboard" element={<DashboardPage />} />
-        <Route path="/trace/:batchCode?" element={<TracePage />} />
+       <Route path="/trace/:qrToken?" element={<TracePage />} />
       </Routes>
     </BrowserRouter>
   );

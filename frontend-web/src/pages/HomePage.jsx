@@ -223,7 +223,7 @@ export default function HomePage() {
 
           <div className="flex items-center gap-2.5">
             <Link
-              to="/trace/lot-rau-2026"
+              to="/trace/LO-CBX-01"
               className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-800 text-xs font-semibold hover:bg-emerald-100"
             >
               <QrCode className="w-4 h-4" /> Thử Quét QR Lô Hàng

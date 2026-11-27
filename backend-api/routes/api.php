@@ -42,17 +42,21 @@ Route::get('/products', function () {
     return response()->json($products);
 });
 
+
 // 2. API Truy xuất nguồn gốc qua mã QR (UC-04)
 Route::get('/trace/{qrToken}', function ($qrToken) {
     $batch = DB::table('batches')
         ->join('products', 'batches.product_id', '=', 'products.id')
-        ->join('users', 'batches.farm_staff_id', '=', 'users.id')
-        ->where('batches.qr_code', $qrToken)
+        ->leftJoin('users', 'batches.farm_staff_id', '=', 'users.id')
+        ->where(function ($query) use ($qrToken) {
+            $query->where('batches.qr_code', $qrToken)
+                  ->orWhere('batches.ma_lo', $qrToken);
+        })
         ->select(
             'batches.*',
             'products.ten_san_pham',
             'products.hinh_anh_dai_dien',
-            'users.ho_ten as nguoi_phu_trach'
+            DB::raw("COALESCE(users.ho_ten, 'Nhân viên trang trại') as nguoi_phu_trach")
         )
         ->first();
 
